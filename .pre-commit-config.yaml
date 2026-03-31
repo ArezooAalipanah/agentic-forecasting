@@ -42,11 +42,16 @@ repos:
       types: [python]
       exclude: "tests"
 
+  - repo: https://github.com/kynan/nbstripout
+    rev: 0.9.1
+    hooks:
+    - id: nbstripout
+
   - repo: https://github.com/nbQA-dev/nbQA
     rev: 1.9.1
     hooks:
     - id: nbqa-ruff
-      args: [--fix, --exit-non-zero-on-fix, --ignore=D100]
+      args: [--fix, --exit-non-zero-on-fix, --ignore=D100, --ignore=B018]
 
 ci:
     autofix_commit_msg: |
