@@ -29,3 +29,5 @@ wheels/
 # The leading slash anchors this to the repo root so it doesn't match
 # source directories like aieng-forecasting/aieng/forecasting/data/
 /data/
+# Test artifact: adapter fixture used to resolve cache_dir relative to cwd
+/aieng-forecasting/data/

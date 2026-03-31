@@ -57,12 +57,12 @@ def _make_zip_bytes(normalized_id: str, df: pd.DataFrame) -> bytes:
 
 
 @pytest.fixture()
-def adapter() -> StatCanAdapter:
+def adapter(tmp_path: Path) -> StatCanAdapter:
     """Return a StatCanAdapter configured for All-items Canada."""
     return StatCanAdapter(
         table_id="18-10-0004-13",
         member_filter={"GEO": "Canada", "Products and product groups": "All-items"},
-        cache_dir="data/statcan_test",
+        cache_dir=tmp_path,
     )
 
 
@@ -198,7 +198,7 @@ class TestStatCanAdapterFetch:
         assert len(result) == 1
         assert result["value"].iloc[0] == 151.2
 
-    def test_fetch_raises_on_missing_filter_column(self) -> None:
+    def test_fetch_raises_on_missing_filter_column(self, tmp_path: Path) -> None:
         """fetch() raises ValueError when a filter column is absent from the table."""
         raw = pd.DataFrame(
             {"REF_DATE": pd.to_datetime(["2022-01"]), "VALUE": [100.0]}
@@ -206,6 +206,7 @@ class TestStatCanAdapterFetch:
         bad_adapter = StatCanAdapter(
             table_id="18-10-0004-13",
             member_filter={"GEO": "Canada"},
+            cache_dir=tmp_path,
         )
         with (
             patch(f"{_MODULE}._read_zip", return_value=raw),
@@ -214,12 +215,13 @@ class TestStatCanAdapterFetch:
             with pytest.raises(ValueError, match="GEO"):
                 bad_adapter.fetch()
 
-    def test_fetch_raises_when_no_rows_match(self) -> None:
+    def test_fetch_raises_when_no_rows_match(self, tmp_path: Path) -> None:
         """fetch() raises RuntimeError when filter matches zero rows."""
         raw = _make_raw_statcan_df()
         bad_adapter = StatCanAdapter(
             table_id="18-10-0004-13",
             member_filter={"GEO": "Narnia"},
+            cache_dir=tmp_path,
         )
         with (
             patch(f"{_MODULE}._read_zip", return_value=raw),
