@@ -65,18 +65,13 @@ class ForecastingTask(BaseModel):
     """
 
     task_id: str = Field(description="Unique identifier for this forecasting task.")
-    target_series_id: str = Field(
-        description="The series_id (key in SeriesStore) of the series to forecast."
-    )
+    target_series_id: str = Field(description="The series_id (key in SeriesStore) of the series to forecast.")
     horizon: int = Field(ge=1, description="Number of steps ahead to forecast.")
-    frequency: str = Field(
-        description="Pandas offset alias for the forecast frequency, e.g. 'MS', 'h', 'D'."
-    )
+    frequency: str = Field(description="Pandas offset alias for the forecast frequency, e.g. 'MS', 'h', 'D'.")
     description: str = Field(description="Human-readable description of the prediction problem.")
     resolution_fn: str = Field(
         default="observed_value_at_resolution_timestamp",
         description=(
-            "How ground truth is determined. Default resolves to the observed series value "
-            "at the target timestamp."
+            "How ground truth is determined. Default resolves to the observed series value " "at the target timestamp."
         ),
     )

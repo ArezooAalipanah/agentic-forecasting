@@ -31,7 +31,6 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from aieng.forecasting.data import DataService, SeriesMetadata
 from aieng.forecasting.data.adapters import StatCanAdapter
 
-
 # Statistics Canada table containing Canada-wide CPI by product group.
 # Table 18-10-0004-13: Consumer Price Index by product group, monthly,
 # not seasonally adjusted (2002=100 baseline).

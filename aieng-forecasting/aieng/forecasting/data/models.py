@@ -44,9 +44,7 @@ class SeriesRecord(BaseModel):
             If released_at is before timestamp.
         """
         if self.released_at is not None and self.released_at < self.timestamp:
-            raise ValueError(
-                f"released_at ({self.released_at}) cannot be before timestamp ({self.timestamp})"
-            )
+            raise ValueError(f"released_at ({self.released_at}) cannot be before timestamp ({self.timestamp})")
         return self
 
 

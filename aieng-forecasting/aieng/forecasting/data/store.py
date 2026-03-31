@@ -50,9 +50,7 @@ class SeriesStore:
         required = {"timestamp", "value"}
         missing = required - set(df.columns)
         if missing:
-            raise ValueError(
-                f"DataFrame for series {series_id!r} is missing required columns: {missing}"
-            )
+            raise ValueError(f"DataFrame for series {series_id!r} is missing required columns: {missing}")
         self._data[series_id] = df.copy()
         self._metadata[series_id] = metadata
 
@@ -75,9 +73,7 @@ class SeriesStore:
             If ``series_id`` is not registered.
         """
         if series_id not in self._data:
-            raise KeyError(
-                f"Series {series_id!r} not found. Registered series: {self.series_ids}"
-            )
+            raise KeyError(f"Series {series_id!r} not found. Registered series: {self.series_ids}")
         return self._data[series_id].copy()
 
     def get_metadata(self, series_id: str) -> SeriesMetadata:
@@ -99,9 +95,7 @@ class SeriesStore:
             If ``series_id`` is not registered.
         """
         if series_id not in self._metadata:
-            raise KeyError(
-                f"Series {series_id!r} not found. Registered series: {self.series_ids}"
-            )
+            raise KeyError(f"Series {series_id!r} not found. Registered series: {self.series_ids}")
         return self._metadata[series_id]
 
     @property
