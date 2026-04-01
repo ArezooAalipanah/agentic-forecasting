@@ -118,9 +118,10 @@ ignore = [
 # Ignore import violations in all `__init__.py` files.
 [tool.ruff.lint.per-file-ignores]
 "__init__.py" = ["E402", "F401", "F403", "F811"]
-# Scripts and notebooks: sys.path hacks and lighter docstring expectations than library code.
-"scripts/**" = ["D1", "E402", "W505"]
-"implementations/**" = ["D1", "E402", "W505"]
+# Scripts and notebooks: sys.path hacks, lighter docstring rules, and ERA001 suppressed
+# (commented-out code detection is too aggressive for exploratory/one-off code).
+"scripts/**" = ["D1", "E402", "W505", "ERA001"]
+"implementations/**" = ["D1", "E402", "W505", "ERA001"]
 
 [tool.ruff.lint.pep8-naming]
 ignore-names = ["X*", "setUp"]

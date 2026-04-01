@@ -57,7 +57,7 @@ All prediction payloads and data interfaces use **Pydantic** models with mypy-co
 
 **Ruff** in that config applies to Python and notebooks repo-wide, but **`scripts/**`** and **`implementations/**`** use **per-file ignores** in the root `pyproject.toml` for patterns common in one-off scripts (e.g. `sys.path` before imports, lighter docstring rules). **`check-docstring-first`** is skipped for `scripts/` and `implementations/` in the pre-commit config for the same reason.
 
-**Git commit does not run pre-commit locally** — hooks are not installed on `git commit` so contributors are not blocked or surprised by stash behavior. **CI** still runs `pre-commit run --all-files` on pushes/PRs to `main`. **pre-commit.ci** skips the mypy hook in that config because the hosted image may not mirror every contributor’s uv layout; GitHub Actions uses `uv sync` and runs the full suite.
+**Git commit does not run pre-commit locally** — hooks are not installed on `git commit` so contributors are not blocked or surprised by stash behavior. **`make lint`** (ruff format + ruff check + mypy) is the recommended pre-push check; a passing `make lint` means CI will accept the code. For the full pre-commit suite (yaml checks, uv-lock, etc.) run `uv run pre-commit run --all-files`. **pre-commit.ci** skips the mypy hook in that config because the hosted image may not mirror every contributor’s uv layout; GitHub Actions uses `uv sync` and runs the full suite.
 
 ### Notebook outputs
 

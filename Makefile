@@ -6,11 +6,14 @@ UV := uv run
 dev:
 	uv sync --group dev
 
-# Apply Black and isort (writes files). Use alone when you want formatting without mypy.
+# Format with ruff (replaces black + isort). Writes files in place.
 format:
-	$(UV) black .
-	$(UV) isort .
+	$(UV) ruff format .
+	$(UV) ruff check . --fix --select I
 
-# Apply Black/isort, then run mypy on `aieng`. Auto-fixes what Black/isort can; mypy only reports.
+# Run ruff (format + lint) then mypy. Writes formatting fixes in place.
+# A passing `make lint` guarantees CI will accept the code.
+# To fully mirror CI (yaml checks, uv-lock, etc.) run: uv run pre-commit run --all-files
 lint: format
+	$(UV) ruff check .
 	$(UV) mypy -p aieng

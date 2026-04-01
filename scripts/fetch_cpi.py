@@ -38,11 +38,13 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
+
 # Ensure the workspace root is on sys.path when run directly.
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from aieng.forecasting.data import DataService, SeriesMetadata
 from aieng.forecasting.data.adapters import StatCanAdapter
+
 
 # Statistics Canada table: Consumer Price Index, by geography, monthly,
 # percentage change, not seasonally adjusted, provinces, Whitehorse and
