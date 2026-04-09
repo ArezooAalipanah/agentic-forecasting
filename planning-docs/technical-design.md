@@ -48,8 +48,9 @@ aieng-forecasting/aieng/forecasting/
 
 **Concrete predictor implementations do not live in this package.** The
 package exports only the `Predictor` ABC and evaluation infrastructure.
-Reference implementations of predictors live in `implementations/` alongside
-the use-case notebooks and experiments that demonstrate them.
+Reference implementations live in `implementations/methods/` (importable,
+cross-cutting) and `implementations/experiments/` (use-case notebooks and
+task-specific config). See the Implementations layer structure section below.
 
 Tests mirror the package under `aieng-forecasting/tests/aieng/forecasting/`.
 
@@ -68,7 +69,6 @@ implementations/
 └── experiments/              # NOT a Python package — notebooks and scripts only
     └── <use-case>/           # e.g. economic_forecasting/, cfpr/, boc_rate_decisions/
         ├── README.md         # learning path, interfaces quick-reference
-        ├── predictors/       # task-specific predictor config / starting-point templates
         └── *.ipynb / *.py    # notebooks and experiment scripts
 ```
 
@@ -457,16 +457,18 @@ Shared abstractions are extracted after both passes are working — not designed
 
 1. ✅ `ContinuousForecast` + `Prediction` Pydantic models — YAML-serializable
 2. ✅ `Predictor` ABC — `predict(task: ForecastingTask, context: ForecastContext) -> Prediction`
-3. ✅ `DartsAutoARIMAPredictor` (Darts AutoARIMA, 500 Monte Carlo samples) — first reference predictor, defined inline in `cpi_backtest_demo.ipynb` and as a standalone reference in `implementations/economic_forecasting/predictors/`
+3. ✅ `DartsAutoARIMAPredictor` (Darts AutoARIMA, 500 Monte Carlo samples) — defined inline in `implementations/experiments/economic_forecasting/cpi_backtest_demo.ipynb`; moving to `implementations/methods/darts_arima.py` is tracked in the backlog (T3)
 4. ✅ `BacktestSpec` + `BacktestResult` Pydantic models
 5. ✅ `backtest()` function — iterates origins, scores with CRPS via `properscoring`
 6. ✅ `released_at` fix for StatCan CPI (21-day approximation)
 7. ✅ Reference spec YAML (`reference_specs/cpi_allitems_12m.yaml`) — Jan/Jul origins, 2000–2026
-8. ✅ Demo notebook (`implementations/economic_forecasting/cpi_backtest_demo.ipynb`)
+8. ✅ Demo notebook (`implementations/experiments/economic_forecasting/cpi_backtest_demo.ipynb`)
 9. ✅ `Prediction.metadata` — optional `dict[str, Any]` escape hatch for predictor side-channel data
 10. ✅ Eval mode — `EvalSpec`, `EvalResult`, `EvalTracker`, `EvalBudgetExceededError`, `evaluate()`, reference spec `reference_specs/cpi_allitems_eval_2yr.yaml`
+11. ✅ `LastValuePredictor` — naive last-value baseline in `implementations/methods/naive.py`; first method in the importable `methods` package; also the annotated `Predictor` interface reference
+12. ✅ Two-predictor comparison in demo notebook — `LastValuePredictor` vs `DartsAutoARIMAPredictor` on `cpi_allitems_12m`, with per-origin CRPS table and comparison chart
 
-**Next:** Second predictor variant for comparison, then Pass 2 (Metaculus / `BinaryForecast`).
+**Next:** Pass 2 (Metaculus / `BinaryForecast` / BoC reference experiment); see backlog T4. Also: expand `methods/` with `SeasonalNaivePredictor`, a second Darts model, and a foundation model predictor (T3).
 
 ### Long-Term Vision
 
