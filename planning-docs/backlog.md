@@ -25,7 +25,7 @@ Canada's Food Price Report (CFPR) is an annual report that forecasts food price 
 - Ingest into the data service, likely via `LocalCSVAdapter` with a checked-in config YAML
 - Define a `ForecastingTask` that mirrors the CFPR's actual prediction structure (annual horizon, category-level series — Food total, Bakery, Dairy, etc.)
 - Write a reference `BacktestSpec` YAML in `reference_specs/`
-- Produce a demo notebook under `implementations/cfpr_forecasting/` showing the existing `DartsAutoARIMAPredictor` applied to the new task
+- Produce a demo notebook under `implementations/experiments/cfpr/` showing `DartsAutoARIMAPredictor` (imported from `methods/`) applied to the new task
 - Write a `README.md` for the use case folder (learning path, task description, data provenance)
 
 **Acceptance criteria:**
@@ -74,15 +74,17 @@ The "base LLMP" (LLM Process) is the minimal viable LLM-based predictor: an "LLM
 The current predictor library has one variant: `DartsAutoARIMAPredictor`. Before the bootcamp, we want a richer numerical forecaster leaderboard: a trivial baseline, a broader Darts model, and at least one time series foundation model. This gives participants clear reference points to beat and demonstrates the breadth of the numerical forecasting paradigm. Also includes long-deferred notebook polish.
 
 **Scope:**
-- `SeasonalNaivePredictor` — trivial seasonal last-value baseline; the floor every other predictor must beat
+- Move `DartsAutoARIMAPredictor` from inline notebook definition to `implementations/methods/darts_arima.py` (it is cross-cutting and belongs in the methods library; update the CPI demo notebook to import it)
+- `SeasonalNaivePredictor` in `implementations/methods/naive.py` — one level above the already-implemented `LastValuePredictor`; both are baselines that statistical and ML models should comfortably beat
 - A second Darts model predictor (ETS or N-BEATS — pick whichever gives the better demo story; document the choice)
 - `ChronosPredictor` or `TimesFMPredictor` — one time series foundation model via HuggingFace; aim for zero-shot application with no fine-tuning
-- Apply all to `cpi_allitems_12m`; produce a comparison table (mean CRPS, calibration)
-- **Notebook polish** for `cpi_backtest_demo.ipynb`: confidence interval shading as filled regions, clean axis labels, focus the plot window on the last 10 years, add a multi-series panel showing Food, Shelter, and Water/fuel/electricity alongside All-items
+- Apply all to `cpi_allitems_12m`; extend the comparison table in `cpi_backtest_demo.ipynb` (mean CRPS for all predictors)
+- **Remaining notebook polish** for `cpi_backtest_demo.ipynb`: focus the plot window on the last 10 years, add a multi-series panel showing Food, Shelter, and Water/fuel/electricity alongside All-items *(CI shading and naive/ARIMA comparison are already done)*
 
 **Acceptance criteria:**
-- Four predictors runnable on the CPI reference spec with reported scores
-- Notebook renders cleanly with shaded CI bands and tidy labels
+- Five predictors runnable on the CPI reference spec with reported CRPS scores: `LastValuePredictor`, `SeasonalNaivePredictor`, `DartsAutoARIMAPredictor`, a second Darts model, and a foundation model
+- `DartsAutoARIMAPredictor` lives in `methods/darts_arima.py` and is imported (not redefined) in the demo notebook
+- Notebook renders cleanly with tidy labels and the last-10-years view
 - Foundation model predictor documented with zero-shot framing rationale
 
 ---
@@ -104,7 +106,7 @@ The current evaluation harness only supports `ContinuousForecast`. The project c
 - Export all new symbols from `evaluation/__init__.py`
 - BoC interest rate decisions: source historical decisions (Bank of Canada publishes these publicly), ingest, define `ForecastingTask` for "Will BoC cut/hold/raise at the next announcement?"
 - Reference spec YAML in `reference_specs/`
-- Demo notebook under `implementations/boc_rate_decisions/`
+- Demo notebook under `implementations/experiments/boc_rate_decisions/`
 - Document Metaculus API surface (no integration required yet — just document what the integration point would look like)
 
 **Acceptance criteria:**
@@ -131,7 +133,7 @@ The "frontier agent" is the most powerful forecaster template: an ADK-based codi
   - Code execution tool (via ADK's built-in code execution or a sandboxed equivalent)
   - Optional: web search / news retrieval tool
 - `AgentPredictor(Predictor)` in the package: wraps the ADK agent, handles async execution and output parsing into `ContinuousForecast`
-- Task-specific configuration (system prompt, enabled tools) in `implementations/`
+- Task-specific configuration (system prompt, enabled tools) in `implementations/experiments/<use-case>/`
 - Demonstrate on CPI task; compare CRPS vs ARIMA and base LLMP
 - **Timebox aggressively** — a working end-to-end demo with documented design decisions is more valuable than architectural completeness
 
