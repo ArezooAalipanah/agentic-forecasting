@@ -21,9 +21,10 @@ This file is a plain-text complement to ClickUp. It captures the current set of 
 Canada's Food Price Report (CFPR) is an annual report that forecasts food price inflation categories for the coming year. It is a well-understood, real-world forecasting task with publicly available historical predictions and ground-truth outcomes. It could be the primary use case for the Kaggle submission (T6) and a clean reference for comparing all forecaster types.
 
 **Scope:**
-- Source and document historical CFPR predictions and ground-truth annual food CPI outcomes
+- Source and document historical CFPR publications/predictions and ground-truth annual food CPI outcomes
 - Ingest into the data service, likely via `LocalCSVAdapter` with a checked-in config YAML
 - Define a `ForecastingTask` that mirrors the CFPR's actual prediction structure (annual horizon, category-level series — Food total, Bakery, Dairy, etc.)
+-- Ethan can provide more details, but historically we used point predictions over an 18 month horizon with the prediction date up to about the August or September CPI release date. We typically used point predictions of what the observed CPI will be for 8 or 9 food categories. You can see in https://github.com/VectorInstitute/foodprice-forecasting how we set up this experiment (5 years ago!). We can use this to extract the reference forecasting experiment/task, but the methods themselves (including forecasts and evaluations) are outdated.
 - Write a reference `BacktestSpec` YAML in `reference_specs/`
 - Produce a demo notebook under `implementations/experiments/cfpr/` showing `DartsAutoARIMAPredictor` (imported from `methods/`) applied to the new task
 - Write a `README.md` for the use case folder (learning path, task description, data provenance)
