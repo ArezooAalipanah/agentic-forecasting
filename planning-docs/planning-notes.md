@@ -1,3 +1,44 @@
+## Apr 14, 2026 — Sprint 1 planning: team assignments and new tasks [Ethan & Agent]
+
+### Owner assignments
+
+| Task | Title | Owner |
+|------|-------|-------|
+| T1 | CFPR Reference Experiment & Data Pipeline | Ethan |
+| T2 | Base LLMP Predictor | Ali |
+| T5 | Frontier Agentic Forecaster | Ali (follow-on from T2) |
+| T7 *(new)* | S&P500 Reference Use Case | Behnoosh |
+| T8 *(new)* | Code Quality & Bootcamp Infrastructure | Franklin |
+| T9 *(new)* | Call for Participation Presentation | Ahmad |
+| T10 *(new)* | Testing Engine Evolution: Backtest → Eval → Live | Ethan |
+| T3 | Numerical Forecaster Expansion & Foundation Models | TBD |
+| T4 | Pass 2: Binary Forecasting + BoC Reference Experiment | TBD |
+| T6 | Fine-Tunable LLMP + Kaggle Submission *(nice to have)* | TBD |
+
+H1 promoted to T7 (S&P500 use case) with significantly expanded scope — Behnoosh owns the full arc from task framing to method application to live testing design.
+
+### Key decisions
+
+- **Ali's trajectory is T2 → T5.** Build the base LLMP first (no agent framework overhead, just a clean LiteLLM call with Pydantic output validation), then graduate to the full ADK-based frontier agent. Starting dataset is StatCan CPI (already available); apply to SP500 once T7 is ready.
+
+- **Ethan owns both CFPR and the testing engine design (T1 + T10).** These run simultaneously. T1 grounds the abstract testing infrastructure in a concrete, well-understood use case. T10 is the harder design work: what does live testing actually mean for this system, especially for agentic forecasters that can browse the web?
+
+- **The information cutoff problem is a first-class design concern (T10).** An agentic forecaster with live web search cannot be retroactively restricted to pre-cutoff information with the same reliability as the data service's `CutoffEnforcer`. This needs an honest written position before we invest heavily in backtest-based error generalization estimates for agentic methods. Ethan and Ali should develop this collaboratively.
+
+- **Ahmad is single-sprint; deadline is firm.** CFP presentation should be review-ready at least 1 week before the meeting. Ahmad should read the charter, technical design doc, and recent planning notes before writing anything.
+
+- **Franklin task clarification needed.** Franklin's headline suggestion — "refactor Methods so they are separated from reference implementations" — was completed on Apr 9 in the `implementations/` restructuring session (`implementations/methods/` + `implementations/experiments/` split). Franklin should review what was done before starting T8 to avoid duplicate work. His task should focus on: (1) any additional engineering quality improvements he sees, and (2) the Coder platform setup. If the Apr 9 work already satisfies his refactoring intent, the Coder platform assessment becomes the primary deliverable.
+
+- **T3 and T4 remain TBD.** No owner assigned this sprint. T3 (numerical forecaster expansion) could naturally fold into Behnoosh's SP500 work once she's ready for more methods. T4 (binary forecasting + BoC) is a prerequisite for H3 (ForecastBench); defer until an owner is identified.
+
+### Open questions (to track)
+
+1. **Internet context cutoffs for agentic backtesting** — how much of this problem is inherent vs. controllable? What does a credible backtest look like for a web-searching agent? (Ethan + Ali, T10)
+2. **What additional refactoring does Franklin have in mind?** The Apr 9 restructuring may have pre-empted it. Confirm with Franklin before T8 starts.
+3. **T6 (Kaggle) status** — with T7, T8, T9, T10 all now in the active sprint, T6 is even more of a stretch. Should it be moved to the holding queue to signal explicit deprioritization?
+
+---
+
 ## Apr 13, 2026 - Some planning updates [Ethan]
 
 Just a small update related to the idea to use historical ForecastBench data as learning material. A really interesting use case for agentic forecasting would naturally be an agent that users can chat with to ask questions like what-ifs or do deeper analysis. In other words, be able to do things other than outputting a forecast. It could be much more interactive. But the interesting thing still, to me, is: how to evaluate such agents? I think this is related to but also generalizes the idea that forecasting agents can learn from experience. My hypothesis here is that if an agent (and to be clear I would define agent as including the model(s) it uses) is able to learn from experience, then its performance should be measurable on more than one task. So I think it would be really interesting to expand the scope of tasks to include things like scenario modelling and what-if analysis. After all, if we end up with capable forecasting agents with good, measurable track records, then we may want to ask them other, related questions. With respect to our CFPR (food price forecasting) use case, we might want to ask something like: If oil prices remain high this year, what should we expect for baked goods prices next year? And the hypothesis here is that an *experienced forecasting agent* may perform better than a general agent, even if they are using the same model and similar tools under the hood. In other words (and this is more on the research side of what this project is about) I want to ask "Can a forecasting agent learn from experience to become a better forecasting agent?" And of course this can break down in to much more specific questions. 
