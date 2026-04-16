@@ -53,8 +53,12 @@ DEFAULT_CACHE_DIR = REPO_ROOT / "data" / "fred"
 #   - Canadian 10-year bond yield: measures cost of capital and credit
 #     conditions affecting food production and distribution.
 #   - Canada/US exchange rate: direct pass-through to import food prices.
-#   - S&P 100 Volatility (VXO): broad proxy for financial market uncertainty,
-#     correlated with commodity price volatility.
+#
+# All series below are published at monthly (MS) frequency on FRED, which
+# matches the Statistics Canada food CPI target frequency.  Daily series
+# (e.g. VXO, VIXCLS) are intentionally excluded here — the ``FREDAdapter``
+# does not resample, so mixing frequencies silently breaks the covariate
+# alignment inside Darts models.
 # ---------------------------------------------------------------------------
 
 FRED_SERIES: list[tuple[str, str, str, str]] = [
@@ -87,12 +91,6 @@ FRED_SERIES: list[tuple[str, str, str, str]] = [
         "EXCAUS",
         "Canada / US Foreign Exchange Rate (CAD per 1 USD, monthly average)",
         "CAD per USD",
-    ),
-    (
-        "fred_sp100_volatility_vxo",
-        "VXOCLS",
-        "CBOE S&P 100 Volatility Index (VXO), daily close (monthly avg)",
-        "Index",
     ),
 ]
 
