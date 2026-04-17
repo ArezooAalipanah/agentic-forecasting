@@ -25,7 +25,7 @@ Intended usage in a bootcamp session::
     from pathlib import Path
     from aieng.forecasting.evaluation import EvalSpec, EvalTracker, evaluate
 
-    with open("reference_specs/cpi_allitems_eval_2yr.yaml") as f:
+    with open("reference_specs/cpi_gasoline_eval_2yr.yaml") as f:
         spec = EvalSpec.model_validate(yaml.safe_load(f))
 
     tracker = EvalTracker(Path("eval_runs.yaml"))
@@ -124,13 +124,13 @@ class EvalSpec(BaseModel):
     Examples
     --------
     >>> spec = EvalSpec(
-    ...     spec_id="cpi_allitems_eval_2yr",
+    ...     spec_id="cpi_gasoline_eval_2yr",
     ...     task=ForecastingTask(
-    ...         task_id="cpi_all_items_canada_12m",
-    ...         target_series_id="cpi_all_items_canada",
+    ...         task_id="cpi_gasoline_canada_12m",
+    ...         target_series_id="cpi_gasoline_canada",
     ...         horizon=12,
     ...         frequency="MS",
-    ...         description="CPI All-items Canada, 12-month ahead forecast",
+    ...         description="CPI Gasoline Canada, 12-month ahead forecast",
     ...     ),
     ...     start=datetime(2024, 1, 1),
     ...     end=datetime(2026, 1, 1),
@@ -248,7 +248,7 @@ class EvalTracker:
 
     Tracking file format::
 
-        cpi_allitems_eval_2yr:
+        cpi_gasoline_eval_2yr:
           runs: 2
           last_run_at: "2026-04-02T10:00:00"
 

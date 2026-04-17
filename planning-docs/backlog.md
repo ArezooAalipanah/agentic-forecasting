@@ -91,8 +91,8 @@ The current predictor library has one variant: `DartsAutoARIMAPredictor`. Before
 - `SeasonalNaivePredictor` in `implementations/methods/naive.py`
 - A second Darts model predictor (ETS or N-BEATS)
 - `ChronosPredictor` or `TimesFMPredictor` — one time series foundation model via HuggingFace, zero-shot
-- Apply all to `cpi_allitems_12m`; extend the comparison table in `cpi_backtest_demo.ipynb`
-- Remaining notebook polish: focus plot on the last 10 years; add a multi-series panel showing Food, Shelter, and Water/fuel/electricity alongside All-items
+- Apply all to `cpi_gasoline_12m`; extend the comparison table in `getting_started/cpi_backtest_demo.ipynb`
+- Consider a multi-series panel showing Gasoline, Shelter, and All-items side by side (the getting-started notebook already runs the comparison for gasoline vs. shelter — easy to extend)
 
 ---
 

@@ -69,7 +69,7 @@ implementations/
 ├── methods/                  # installable Python package (import as `methods`)
 │   └── <method>.py           # e.g. base_llmp.py, darts_arima.py
 └── experiments/              # NOT a Python package — notebooks and scripts only
-    └── <use-case>/           # e.g. economic_forecasting/, cfpr/, boc_rate_decisions/
+    └── <use-case>/           # e.g. getting_started/, food_price_forecasting/, boc_rate_decisions/
         ├── README.md         # learning path, interfaces quick-reference
         └── *.ipynb / *.py    # notebooks and experiment scripts
 ```
@@ -123,7 +123,7 @@ All prediction payloads and data interfaces use **Pydantic** models with mypy-co
 
 ### Notebook outputs
 
-**Decision (Apr 1, 2026):** Notebook outputs are **not** stripped automatically. `nbstripout` has been removed from the pre-commit config. Contributors decide per-notebook whether to commit outputs — exploration notebooks (e.g., `cpi_data_exploration.ipynb`) may include outputs to aid readability. The `nbqa-ruff` linter still runs on notebook source cells via pre-commit.
+**Decision (Apr 1, 2026):** Notebook outputs are **not** stripped automatically. `nbstripout` has been removed from the pre-commit config. Contributors decide per-notebook whether to commit outputs — exploration notebooks (e.g. `getting_started/cpi_data_exploration.ipynb`) may include outputs to aid readability. The `nbqa-ruff` linter still runs on notebook source cells via pre-commit.
 
 ---
 
@@ -314,7 +314,7 @@ class EvalSpec(BaseModel):
 A lightweight, file-backed counter. Persists to a YAML file at a caller-supplied path:
 
 ```yaml
-cpi_allitems_eval_2yr:
+cpi_gasoline_eval_2yr:
   runs: 2
   last_run_at: "2026-04-03T10:00:00"
 ```
@@ -573,11 +573,11 @@ Shared abstractions are extracted after both passes are working — not designed
 5. ✅ `backtest()` function — iterates origins; for each origin, scores all `list[Prediction]` returned by the predictor; flat `(origin × horizon)` result list
 6. ✅ `released_at` fix for StatCan CPI (21-day approximation)
 7. ✅ Reference spec YAMLs (`reference_specs/`) — use `horizons: [N]` (canonical); old `horizon: N` still accepted via backward-compat validator
-8. ✅ Demo notebook (`implementations/experiments/economic_forecasting/cpi_backtest_demo.ipynb`)
+8. ✅ Demo notebook (`implementations/experiments/getting_started/cpi_backtest_demo.ipynb` — retargeted Apr 17, 2026 from CPI All-items to CPI Gasoline for a visibly-hard hello-world story)
 9. ✅ `Prediction.metadata` — optional `dict[str, Any]` escape hatch for predictor side-channel data
-10. ✅ Eval mode — `EvalSpec`, `EvalResult`, `EvalTracker`, `EvalBudgetExceededError`, `evaluate()`, reference spec `reference_specs/cpi_allitems_eval_2yr.yaml`
+10. ✅ Eval mode — `EvalSpec`, `EvalResult`, `EvalTracker`, `EvalBudgetExceededError`, `evaluate()`, reference spec `reference_specs/cpi_gasoline_eval_2yr.yaml`
 11. ✅ `LastValuePredictor` — naive last-value baseline in `implementations/methods/naive.py`; returns one `Prediction` per horizon step (same flat value, persistence assumption)
-12. ✅ Two-predictor comparison in demo notebook — `LastValuePredictor` vs `DartsAutoARIMAPredictor` on `cpi_allitems_12m`
+12. ✅ Two-predictor comparison in demo notebook — `LastValuePredictor` vs `DartsAutoARIMAPredictor` on `cpi_gasoline_12m`
 
 13. ✅ `MultiTargetBacktestSpec` + `multi_backtest()` — evaluate one predictor across many tasks with a shared window; in `backtest.py`
 14. ✅ `MultiTargetEvalSpec` + `multi_evaluate()` — budget-limited multi-target eval; single call costs one budget run; in `eval.py`

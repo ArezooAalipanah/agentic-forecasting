@@ -9,9 +9,10 @@ This is a uv workspace package. It is installed automatically when you run
 
 ```
 implementations/
-├── methods/        # importable reference Predictor implementations
-└── experiments/    # use-case notebooks, specs, task configs (not imported)
-    └── economic_forecasting/
+├── methods/              # importable reference Predictor implementations
+└── experiments/          # use-case notebooks, specs, task configs
+    ├── getting_started/          # hello-world: CPI gasoline backtest
+    └── food_price_forecasting/   # CFPR reference experiment (flagship)
 ```
 
 ## Importing methods
