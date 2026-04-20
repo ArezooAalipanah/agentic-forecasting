@@ -26,7 +26,7 @@ Five people are active this sprint, each with a single focused area.
 
 Simultaneously develop the CFPR (Canada's Food Price Report) reference experiment and evolve the backtest/eval/live testing engine. These run concurrently: the CFPR task is familiar territory (Ethan is a many-time contributor to the real report) and grounds the more uncertain infrastructure work.
 
-**CFPR use case:** Source and document historical CFPR predictions and ground-truth food CPI outcomes; ingest into the data service; define a `ForecastingTask` mirroring the CFPR's actual prediction structure (annual horizon, ~8 food CPI categories, prediction date around the August/September CPI release); write a `BacktestSpec` YAML; produce a demo notebook under `implementations/experiments/cfpr/` with `DartsAutoARIMAPredictor` as the first baseline. A prior implementation from five years ago lives at https://github.com/VectorInstitute/foodprice-forecasting — useful for extracting the task structure, but the methods are outdated.
+**CFPR use case:** ✅ **IN PROGRESS (Apr 17, 2026)** — Food price experiment is live at `implementations/experiments/food_price_forecasting/` and validated end-to-end with real data. The experiment notebook is now a thin narrative over dedicated helper modules (`data.py`, `analysis.py`, `plots.py`), the canonical YAML specs (`reference_specs/food_cpi/food_cpi_cfpr_{backtest,eval}.yaml`) target all 9 food CPI sub-indices across a 12-step trajectory (horizons 6-17) from July origins, and `cached_multi_backtest()` writes per-predictor results to `data/predictions/` so reruns are effectively free. `EvalTracker` is filesystem-backed at `data/eval_runs.yaml` (gitignored) for per-participant budget enforcement. `describe_spec()`/`describe_task()` render spec YAML as plain text suitable for prompts. FRED covariates are deliberately out of scope for the canonical experiment (see *Covariate framing for multivariate and agentic predictors* below). **Remaining:** documentation passes for `technical-design.md`, first LLM/agent predictor once Ali's base LLMP is ready.
 
 **Testing engine:** The core backtest and eval infrastructure exists. What remains is the harder design question: what does "live testing" look like, and how do we handle it honestly for agentic forecasters? The central open question — to be explored with Ali — is how realistically we can retrieve internet context with effective information cutoffs for backtesting agentic forecasters. We may find that backtest results won't reliably generalize to live performance for agents that search the web; that's fine. Get the plumbing working, document the problem honestly, and chart the course toward agent skills that can interact with the backtest/eval engines and with baseline/numerical forecasters.
 
@@ -87,12 +87,12 @@ These tasks are scoped and understood but not yet assigned. Reorder priorities f
 
 The current predictor library has one variant: `DartsAutoARIMAPredictor`. Before the bootcamp, we want a richer numerical forecaster leaderboard: a trivial baseline, a broader Darts model, and at least one time series foundation model. This gives participants clear reference points to beat and demonstrates the breadth of the numerical forecasting paradigm.
 
-- Move `DartsAutoARIMAPredictor` from inline notebook definition to `implementations/methods/darts_arima.py`; update the CPI demo notebook to import it
+- ✅ Move `DartsAutoARIMAPredictor` from inline notebook definition to `implementations/methods/darts_arima.py`; update the CPI demo notebook to import it (completed Apr 16, 2026)
 - `SeasonalNaivePredictor` in `implementations/methods/naive.py`
 - A second Darts model predictor (ETS or N-BEATS)
 - `ChronosPredictor` or `TimesFMPredictor` — one time series foundation model via HuggingFace, zero-shot
-- Apply all to `cpi_allitems_12m`; extend the comparison table in `cpi_backtest_demo.ipynb`
-- Remaining notebook polish: focus plot on the last 10 years; add a multi-series panel showing Food, Shelter, and Water/fuel/electricity alongside All-items
+- Apply all to `cpi_gasoline_12m`; extend the comparison table in `getting_started/cpi_backtest_demo.ipynb`
+- Consider a multi-series panel showing Gasoline, Shelter, and All-items side by side (the getting-started notebook already runs the comparison for gasoline vs. shelter — easy to extend)
 
 ---
 
@@ -152,6 +152,68 @@ NYISO (New York Independent System Operator) replaces IESO (Ontario electricity)
 **Dependencies:** Binary forecasting task (or later)
 
 Wire `EvalTracker` to per-participant identity for the bootcamp leaderboard. The hook (`EvalTracker` path is caller-supplied) is already in place; this task decides on the identity mechanism and writes the wiring. Deferred until bootcamp infrastructure is more defined.
+
+---
+
+### Numeric Predictors as Agent Skills: Design Session
+
+**Theme:** Agent architecture
+**Dependencies:** Ali's base LLMP up and running; CFPR use case (reference task)
+**Deferred from:** Apr 17, 2026 CFPR refactor session
+
+A full design session is needed to answer the open question: how should an
+agentic forecaster reach for a numerical predictor (AutoARIMA, LightGBM,
+foundation model, …) and present its output as part of a structured
+reasoning trace?
+
+Open sub-questions:
+
+- What is the interface contract?  Is a numeric predictor exposed as a tool
+  returning a `ContinuousForecast`, as a sub-agent, or as a callable skill
+  object with its own schema?
+- How does the agent pick between predictors?  (Free choice? Configured
+  short-list? Meta-forecast over predictors?)
+- How do we capture the reasoning and the chosen predictor in the
+  `Prediction.metadata` so the decisions are auditable later?
+- How does this plumb through the existing backtest/eval engine without
+  leaking agent-specific concepts into the `Predictor` ABC?
+
+Output of the session should be a short ADR-style writeup in
+`planning-docs/` plus an entry moved out of this holding queue into an
+active task.  Timebox: a single deep-dive session (2-3h) with one artifact.
+
+---
+
+### Covariate framing for multivariate and agentic predictors
+
+**Theme:** Task / data model
+**Dependencies:** First multivariate numeric predictor and first agentic
+forecaster with access to auxiliary data
+**Deferred from:** Apr 17, 2026 CFPR refactor session
+
+FRED macro covariates (US CPI for food-at-home, meats/poultry/fish/eggs,
+fruits/vegetables; Canada 10-year bond yield; Canada/US exchange rate) were
+intentionally removed from the canonical CFPR experiment because there is
+currently no consistent framing of "exogenous covariates" that works across
+univariate Darts models, multivariate Darts models, LLM/LLMP predictors, and
+agentic forecasters.  The tribal knowledge — *which FRED series, at what
+lags, transformed how* — is encoded only in the old notebook and in
+Ethan's head.
+
+Open sub-questions:
+
+- Should covariates live on the `ForecastingTask` (declaring what signals
+  are permissible) or on the `Predictor` (each model decides what it wants)?
+- Does an agentic forecaster discover covariates by searching the
+  `DataService` registry, by being told in a prompt, or by calling a tool?
+- How do we express "covariates are allowed but optional" so the same task
+  can be run with and without them?
+- Can the `ForecastContext` grow a covariate-view API without coupling the
+  task definition to specific data sources?
+
+Output: a short design doc plus an updated `reference_specs/food_cpi/`
+variant that opts into FRED covariates via whatever mechanism we choose,
+so the old multivariate predictor story can be reinstated cleanly.
 
 ---
 

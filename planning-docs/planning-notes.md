@@ -1,3 +1,291 @@
+## Apr 17, 2026 (pm) — `getting_started/` hello-world refactor + end-of-week tidy [Ethan & Agent]
+
+### Work completed
+
+**`economic_forecasting/` renamed to `getting_started/`**
+- The original example (CPI All-items, 12-month ahead) was too quiet to
+  teach anything — a smooth trending series does not motivate a
+  probabilistic forecast framework.  Retargeted to `cpi_gasoline_canada`:
+  four textbook regime shifts (2008 crude collapse, 2014-16 OPEC
+  decline, 2020 COVID, 2022 Russia/Ukraine) sit inside the backtest
+  window and produce visible CRPS spikes on both the naive and
+  AutoARIMA baselines.  The gasoline/AutoARIMA CRPS (~16.8) is only
+  ~22% below the naive floor (~21.5), which is exactly the teaching
+  moment: a pure univariate time-series method cannot see macro regime
+  shifts coming.  Motivation for everything downstream (covariates,
+  LLM context, agentic retrieval).
+- `implementations/experiments/getting_started/`:
+  - `cpi_data_exploration.ipynb` — trimmed to 3 focus series
+    (all-items, gasoline, shelter) to make the first look uncluttered.
+  - `cpi_backtest_demo.ipynb` — end-to-end tour.  Key additions vs. the
+    prior notebook: a 14×9 CI-band plot showing observed series +
+    AutoARIMA median + 80% band + naive points (focused on
+    2008-present); a `worst-origins` table sorted by AutoARIMA CRPS
+    that we map to real-world events; an optional `evaluate()`
+    walkthrough kept commented out to protect the eval budget; and a
+    shelter comparison cell to show the gasoline-vs-shelter contrast
+    in predictability.
+  - `README.md` — explicit "hello-world" framing, 5-step learning
+    path, graduation link to `food_price_forecasting/`.
+- New reference specs: `reference_specs/cpi_gasoline_{12m,eval_2yr}.yaml`.
+- Removed: `economic_forecasting/`, `cpi_allitems_{12m,eval_2yr}.yaml`.
+- Updated cross-references in root `README.md`,
+  `implementations/README.md`, `experiments/README.md`,
+  `technical-design.md`, `backlog.md`, and aieng docstrings.
+
+**End-to-end execution verified**
+- `cpi_data_exploration.ipynb`: runs in ~5s.
+- `cpi_backtest_demo.ipynb`: runs in ~19s (AutoARIMA on 51 origins is
+  surprisingly fast).  Produces the expected CRPS table (gasoline:
+  naive 21.5, arima 16.8; shelter: naive 4.2, arima 1.7) and the
+  worst-origins table identifies 2021-Jul, 2008-Jul, 2014-Jan, 2021-Jan,
+  2007-Jul — exactly the regime shifts the narrative predicts.
+- `make lint` passes cleanly (after a small pre-existing cleanup of
+  ruff format drift in `food_price_forecasting/` and an
+  `artifacts.py` duplicate-docstring flag — separate commit).
+
+### Key decisions
+
+- **`getting_started/` over `energy_cpi/`.**  Folder name should
+  signal role (pedagogical entry point), not content (energy).  The
+  target series can evolve without forcing a rename; the experiment's
+  job is "first contact with the framework," which is stable.
+- **Gasoline, not shelter.**  Both were considered.  Gasoline's
+  amplitude dominates (YoY swings of ±40% vs. shelter's ±8%), which
+  makes the CI-band plot self-explanatory and motivates the downstream
+  work more directly.  Shelter is retained as a comparison series and
+  as the "try this next" exercise at the end of the notebook.
+- **Two reference specs, not one.**  Keep the backtest/eval split
+  symmetric with CFPR so the same patterns carry over.  Both use the
+  same task definition; they only differ in window and `max_runs`.
+- **All 47 CPI series still registered by `scripts/fetch_cpi.py`.**
+  Only the notebook's focus changed; data coverage is unaffected.
+- **Do not rewrite historical planning-notes entries.**  Entries from
+  Mar 31 - Apr 16 still reference `economic_forecasting/` and
+  `cpi_allitems_*.yaml`; they are correct as historical record.  This
+  entry supersedes them.
+
+### Breadcrumbs for next week
+
+End-of-week checkpoint — leaving a trail of pick-ups for the next session:
+
+1. **Sprint sync review.**  Backlog active-sprint items are still
+   current as of Apr 17.  Before Monday: confirm with Ali whether the
+   base LLMP landing timeline is still this sprint (so we can wire
+   `BaseLLMPredictor` into `getting_started/cpi_backtest_demo.ipynb`
+   as a fourth comparison row once it exists).
+2. **Covariate framing design session.**  Still deferred.  The
+   getting-started narrative explicitly flags exogenous covariates as
+   "the obvious next thing"; the sooner we have a design, the sooner
+   we can layer a covariate-using predictor onto both the gasoline
+   and the CFPR tasks.  Candidate covariates for gasoline: FRED WTI
+   spot (DCOILWTICO), CAD/USD exchange rate (DEXCAUS).
+3. **Numeric predictors as agent skills design session.**  Deferred
+   again; still depends on Ali's first LLMP being up.
+4. **Seasonal naive.**  The numerical-expansion holding-queue item
+   explicitly calls out `SeasonalNaivePredictor` — a useful next
+   baseline row in the getting-started notebook (monthly CPI has
+   mild seasonality).  Good onboarding task for a new contributor.
+5. **Eval-result persistence in `getting_started/`.**  The backtest
+   demo serialises a `BacktestResult` to stdout YAML but does not
+   save it.  Once we have >1 predictor comparison, wire in
+   `save_backtest_result` + `load_backtest_result` for rerun speed,
+   mirroring CFPR.  Low priority — single-target backtests are
+   already fast.
+6. **Consistency nit.**  `bootcamp-project-charter.md` still lists
+   NYISO as *the* canonical energy dataset.  That's fine; the
+   getting-started choice of gasoline CPI is not an energy dataset
+   per se (it's a consumer price index on an energy good), so there
+   is no charter conflict.  Revisit only if Behnoosh's NYISO work
+   starts and we want a second getting-started variant.
+
+### Commits
+
+- `8c06589` — `chore`: resolve pre-existing lint drift in CFPR
+  helpers and artifacts
+- `2fa638a` — `refactor(experiments)`: rename economic_forecasting →
+  getting_started with CPI gasoline
+
+---
+
+## Apr 17, 2026 — CFPR refactor: helper modules, artefact cache, canonical spec [Ethan & Agent]
+
+### Work completed
+
+**Spec metadata (framework, `aieng-forecasting`)**
+- Added `spec_id` (required) and `description` (optional) to
+  `MultiTargetBacktestSpec`; `description` propagates to the per-task
+  `BacktestSpec` objects returned by `MultiTargetBacktestSpec.specs()`.
+- Added `description` to `BacktestSpec`, `EvalSpec`, and
+  `MultiTargetEvalSpec` with the same propagation semantics.
+- YAML specs are now self-describing: the same field that humans read in the
+  file is available programmatically for prompts, documentation, and
+  `describe_spec()` output.
+
+**Artefact store (`aieng/forecasting/evaluation/artifacts.py`)**
+- Filesystem-backed persistence for `BacktestResult` and `EvalResult`
+  objects, YAML encoded under `data/predictions/<spec_id>/` by default.
+- Public surface: `save_backtest_result`, `load_backtest_result`,
+  `cached_backtest`, `save_multi_backtest_results`,
+  `load_multi_backtest_results`, `cached_multi_backtest`,
+  `save_eval_result`, `save_multi_eval_results`.
+- `cached_multi_backtest` only recomputes the tasks whose YAML is missing;
+  partial caches are a first-class case.  Reruns of the CFPR notebook drop
+  from ~90s to ~12s on a warm cache.
+- Intentionally lightweight: no database, no Langfuse.  Appropriate for a
+  bootcamp setting where each participant's `data/` directory is private.
+
+**Description helpers (`aieng/forecasting/evaluation/describe.py`)**
+- `describe_task(task, data_service=None)` — plain-text summary of a
+  `ForecastingTask`, optionally enriched with series metadata.
+- `describe_spec(spec, data_service=None)` — same, dispatching across
+  `BacktestSpec`, `EvalSpec`, `MultiTargetBacktestSpec`,
+  `MultiTargetEvalSpec`.  Used by the notebook and destined to be the basis
+  of task descriptions handed to LLM predictors.
+
+**Canonical CFPR YAML specs**
+- Replaced `food_cpi_18m_{backtest,eval}.yaml` with
+  `food_cpi_cfpr_{backtest,eval}.yaml`: 9 tasks (all sub-indices),
+  trajectory horizons `[6..17]` from July origins, annual stride 12.
+- Eval spec protects July 2021-2024 with `max_runs: 5`.
+- Each spec carries `spec_id`, `description`, and per-task descriptions —
+  loading the YAML and calling `describe_spec()` gives the same text a
+  reader sees in the file.
+
+**Experiment decomposition (`implementations/experiments/food_price_forecasting/`)**
+- `data.py`: `FOOD_CPI_SERIES` (the 9 canonical series),
+  `CATEGORY_LABELS`, and `build_food_cpi_service(cache_dir)` that registers
+  them on a `DataService`.  No FRED covariates — the topic is deferred.
+- `analysis.py`: `predictions_to_dataframe`, `compute_avgyoy`
+  (CFPR-specific avg/avg YoY), `summarize_crps`, `compute_mape`,
+  `rationales_table` (for LLM metadata).
+- `plots.py`: trajectory fans, avg/avg YoY 3×3 grid, CRPS disaggregation,
+  MAPE distribution, small-multiples exploration figure.
+- `food_cpi_experiment.ipynb` rewritten as a 26-cell narrative over these
+  helpers; `food_data_exploration.ipynb` shrunk to a 9-cell warm-up.
+- Participants are intended to keep the notebook thin and reach for
+  `analysis.py` / `plots.py` (or their own new modules) when they want to
+  extend the experiment.
+
+**Eval tracker relocation**
+- The CFPR notebook now points `EvalTracker` at
+  `data/eval_runs.yaml` (gitignored) rather than the experiment folder, so
+  each participant's run-budget is private.
+
+**Packaging**
+- Added `experiments*` to `implementations/pyproject.toml` packages.find
+  include so the notebook and tests can import
+  `from experiments.food_price_forecasting.X import ...` without sys.path
+  hacks.
+- Test helpers live at
+  `implementations/tests/experiments/food_price_forecasting/test_analysis.py`
+  with 12 tests covering the tidy-DataFrame shape and the exact semantics
+  of `compute_avgyoy`.
+
+### Key decisions
+
+- **Filesystem over Langfuse for numeric forecast artefacts.**  Langfuse is
+  the right home for agent traces; it is the wrong home for a 192-row
+  AutoARIMA output.  We standardise on YAML-on-disk for the numeric path,
+  under a gitignored directory so nothing about an individual
+  participant's runs leaks into the shared repo.
+- **Specs are the source of truth.**  The notebook loads and pretty-prints
+  YAML via `describe_spec()` rather than reconstructing tasks in Python.
+  Downstream: `describe_spec()` output is the natural thing to put in an
+  LLM prompt describing the problem.
+- **All 9 categories, always.**  The old notebook analysed one category at
+  a time for compute reasons; caching removes that constraint, so we do
+  the canonical CFPR task literally.
+- **No FRED covariates in the canonical experiment.**  The multivariate
+  story (which predictors, which series, which lags, which transforms)
+  was tribal knowledge; removing it from the canonical task lets the
+  bootcamp story stay simple.  Reinstatement deferred to a focused design
+  session (see `backlog.md` → *Covariate framing for multivariate and
+  agentic predictors*).
+- **Numeric predictors as agent skills — defer.**  Agreed with the user
+  that this is the right open question for a future design session, not
+  a this-week task.  Placeholder item added to the backlog.
+
+---
+
+## Apr 16, 2026 — Multi-horizon forecasting: architecture + CFPR trajectory [Ethan & Agent]
+
+### Work completed
+
+**Breaking change: multi-horizon `Predictor` interface**
+- `ForecastingTask.horizon: int` replaced by `ForecastingTask.horizons: list[int]`. A `model_validator(mode="before")` coerces old `horizon=N` syntax transparently — all existing YAML specs, Python call sites, and tests continue to work unchanged.
+- `task.horizon` property (= `max(task.horizons)`) retained as a convenience for single-step callers and as the `n` parameter for Darts trajectory generation.
+- `Predictor.predict()` return type changed from `Prediction` to `list[Prediction]` — one element per step in `task.horizons`. Single-horizon predictors return a one-element list; trajectory predictors return all steps from a single model call.
+- `run_eval_loop` (shared by `backtest()` and `evaluate()`) updated to iterate over the list returned per origin. An origin is "skipped" only if no step is resolvable (warmup not met, or all forecast dates are future). The flat `BacktestResult.predictions` list now has shape `origins_scored × len(task.horizons)`.
+- All three concrete predictors updated (`naive.py`, `darts_arima.py`, `darts_regression.py`): fit once to `n=task.horizon`, extract samples at each requested horizon index.
+- `_fit_and_sample` in `darts_regression.py` now returns `dict[int, ndarray]` (horizon step → samples), replacing the old single-step `ndarray` return.
+- All reference YAML specs updated to use `horizons: [N]` (canonical form).
+- All tests updated; 63 evaluation tests pass.
+
+**Rationale for breaking change:** trajectory-based models (Darts, and future LLMs) naturally produce a coherent forecast path in one call. `predict() -> list[Prediction]` makes single- and multi-horizon a natural special case of the same interface. An LLM reasoner over a 12-month forecast window should not be forced into 12 separate single-step calls — that would destroy temporal coherence.
+
+**CFPR notebook redesign (`food_cpi_experiment.ipynb`)**
+- Uses `horizons=list(range(6, 18))` (12 steps, Jan–Dec of Y+1 from a July origin) for the main backtesting loop.
+- Fast-mode flag (`FAST_MODE = True`): uses only `LastValuePredictor` and two `DartsLinearRegressionPredictor` variants (univariate + with covariates) for rapid iteration. `DartsAutoARIMAPredictor` and `DartsLightGBMPredictor` can be added when `FAST_MODE = False`.
+- New: **avg/avg YoY computation** — `compute_avgyoy()` derives the CFPR-style average-year-over-average-year YoY from the 12-step trajectory, including quantile-level uncertainty bands.
+- New: **trajectory fan charts** for the 3 most recent origins showing observed history + full 12-step predicted distribution.
+- New: **CRPS by horizon** plot — shows whether accuracy degrades at longer horizons.
+- Eval section uses single-horizon spec (`horizons: [18]`) for the protected window.
+
+### Key decisions
+
+- **`horizons` not `horizon_list` or `steps`.** Plural of the existing field name — minimal conceptual overhead; old name is backward-compatible.
+- **No `predict_trajectory()` additive hook.** The cleanest and most general design is a single `predict()` that returns all horizons. An additive hook would create two entry points to maintain and a confusing mental model for implementers.
+- **Flat `BacktestResult.predictions`.** Multi-horizon results are stored as a flat list with each `Prediction` carrying its `forecast_date`. Analysis code slices by `as_of` (origin) or `forecast_date` (horizon) as needed. No nested structure.
+- **`task.horizon` property preserved.** Darts models, Statsforecast, and most third-party libraries take a single `n` argument. `task.horizon = max(task.horizons)` gives them what they need without duplicating that logic in every predictor.
+
+---
+
+## Apr 16, 2026 — CFPR reference experiment + multi-target eval framework [Ethan & Agent]
+
+### Work completed
+
+**Framework: multi-target evaluation support** (`aieng-forecasting`)
+- Added `MultiTargetBacktestSpec` and `multi_backtest()` to `evaluation/backtest.py`: groups N `ForecastingTask`s under shared window parameters; returns `dict[task_id, BacktestResult]`. Validates that all tasks share the same `frequency`.
+- Added `MultiTargetEvalSpec` and `multi_evaluate()` to `evaluation/eval.py`: budget-controlled multi-task eval where a single `multi_evaluate()` call consumes exactly one run from the `EvalTracker` budget regardless of task count. This is the correct semantics — the budget controls how many times you can "peek" at the held-out window, not how many series you evaluate at once.
+- 22 new tests covering construction, validation, result structure, and budget enforcement for all multi-target paths.
+
+**Data: FREDAdapter + covariate fetch script**
+- New `FREDAdapter` (wraps `fredapi`) in `aieng/forecasting/data/adapters/fred.py`. Reads API key from `FRED_API_KEY` env var. Sets `released_at = timestamp` (acknowledged limitation — FRED doesn't expose vintage dates via `fredapi`; noted in module docstring for future refinement).
+- `scripts/fetch_fred.py`: fetches 6 FRED macro covariates for food price forecasting — US CPI food at home, US CPI meats/poultry/fish/eggs, US CPI fruits/vegetables, Canada 10-year bond yield, CAD/USD exchange rate, S&P 100 VXO. Wilshire 5000 (`WILL5000IND`) removed after FRED returned 400.
+- `scripts/fetch_cpi.py`: added 4 missing food CPI categories (fish/seafood, fruit preparations and nuts, other food and non-alcoholic beverages, vegetables and vegetable preparations), completing the 9-series CFPR target set.
+- `python-dotenv` added as a dependency; `fetch_fred.py` now calls `load_dotenv()` at startup so `FRED_API_KEY` is loaded from the repo-root `.env` without requiring a shell export.
+
+**Methods: `DartsAutoARIMAPredictor` promoted to shared module**
+- Moved from an inline notebook definition to `implementations/methods/darts_arima.py`.
+- Univariate only: Darts `AutoARIMA` in this stack does not accept `past_covariates` on `fit`/`predict`, so the predictor exposes no covariate parameters.
+- `cpi_backtest_demo.ipynb` updated to import from the new module.
+
+**Reference specs: `reference_specs/food_cpi/`**
+- Four YAML files: `food_cpi_18m_backtest.yaml`, `food_cpi_18m_eval.yaml`, `food_cpi_3m_backtest.yaml`, `food_cpi_3m_eval.yaml`.
+- Each covers all 9 food CPI target series.
+- Two-horizon design rationale: 18-month horizon replicates the original CFPR experiment; 3-month horizon is added to provide a denser eval window (more resolvable origins within recent history) without going too far back in time.
+
+**Experiment notebooks: `implementations/experiments/food_price_forecasting/`**
+- `food_data_exploration.ipynb`: registers all StatCan food CPI series and FRED covariates, inspects date ranges, plots historical series, computes cross-correlations.
+- `food_cpi_18m_experiment.ipynb`: `multi_backtest` over 18-month horizon for `LastValuePredictor` and univariate `DartsAutoARIMAPredictor`; CRPS comparison table; post-hoc MAPE computed from median forecast; `multi_evaluate` against `food_cpi_18m_eval.yaml`; YoY % change derivation.
+- `food_cpi_3m_experiment.ipynb`: same structure at 3-month horizon; section contrasting eval-density advantage over the 18-month experiment.
+
+### Key decisions
+
+- **Multi-target eval budget counts sessions, not series.** One `multi_evaluate()` call = one budget run. This is the right abstraction — experiments with many correlated targets shouldn't penalise users for grouping them together.
+- **Exogenous covariates are included now.** They are core to the CFPR experiment design and the `DartsAutoARIMAPredictor` covariate pathway is the pattern future predictors should follow.
+- **MAPE is post-hoc / notebook-only.** Not a first-class metric in the eval framework; computed in the analysis notebook from median forecast outputs. CRPS remains the primary scoring rule.
+- **Raw CPI index is the forecast target.** YoY % change is derived at reporting time from the index forecasts — not baked into the `ForecastingTask` target definition.
+- **One directory, two notebooks** for the two horizons. They share the same data setup and predictor imports; the horizon difference is entirely in the loaded YAML spec.
+- **`WILL5000IND` removed.** FRED returns 400 for this series ID. The S&P 100 VXO (`VXOCLS`) is sufficient as a market-uncertainty proxy.
+
+### Commits
+- `9f4f31a` — `feat(cfpr)`: main delivery (23 files, +4424/−1248)
+- `c412abe` — `fix(fetch_fred)`: load `.env`, drop invalid `WILL5000IND`
+
+---
+
 ## Apr 14, 2026 — Sprint 1 planning: team assignments and new tasks [Ethan & Agent]
 
 ### Owner assignments

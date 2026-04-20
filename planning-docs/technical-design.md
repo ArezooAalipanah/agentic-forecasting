@@ -39,8 +39,10 @@ aieng-forecasting/aieng/forecasting/
 ├── data/                   # DataService, ForecastContext, SeriesStore, CutoffEnforcer, adapters
 │   └── adapters/           # BaseAdapter, StatCanAdapter, LocalCSVAdapter (future)
 └── evaluation/             # ForecastingTask, Predictor ABC, Prediction types, backtest + eval engines
-    ├── backtest.py         # BacktestSpec, BacktestResult, backtest(), shared run_eval_loop + _compute_origins
-    ├── eval.py             # EvalSpec, EvalResult, EvalTracker, EvalBudgetExceededError, evaluate()
+    ├── artifacts.py        # Filesystem-backed YAML store for BacktestResult / EvalResult; cached_* wrappers
+    ├── backtest.py         # BacktestSpec, BacktestResult, MultiTargetBacktestSpec, backtest(), multi_backtest()
+    ├── describe.py         # describe_task(), describe_spec() — plain-text descriptions for prompts / docs
+    ├── eval.py             # EvalSpec, EvalResult, MultiTargetEvalSpec, EvalTracker, evaluate(), multi_evaluate()
     ├── prediction.py       # ContinuousForecast, Prediction, STANDARD_QUANTILES
     ├── predictor.py        # Predictor ABC — the interface all forecasting models must implement
     └── task.py             # ForecastingTask
@@ -67,12 +69,12 @@ implementations/
 ├── methods/                  # installable Python package (import as `methods`)
 │   └── <method>.py           # e.g. base_llmp.py, darts_arima.py
 └── experiments/              # NOT a Python package — notebooks and scripts only
-    └── <use-case>/           # e.g. economic_forecasting/, cfpr/, boc_rate_decisions/
+    └── <use-case>/           # e.g. getting_started/, food_price_forecasting/, boc_rate_decisions/
         ├── README.md         # learning path, interfaces quick-reference
         └── *.ipynb / *.py    # notebooks and experiment scripts
 ```
 
-**Packaging note:** `implementations/pyproject.toml` uses `[tool.setuptools.packages.find] include = ["methods*"]` to explicitly tell setuptools to build only the `methods` package. This avoids setuptools' flat-layout auto-discovery, which would otherwise fail when it finds both `methods/` and `experiments/` as apparent top-level packages.
+**Packaging note:** `implementations/pyproject.toml` uses `[tool.setuptools.packages.find] include = ["methods*", "experiments*"]`. The `experiments*` entry is required so that experiment helper modules (e.g. `experiments.food_price_forecasting.analysis`) can be imported from notebooks and tests without `sys.path` hacks. Individual experiment notebooks themselves remain run-directly artefacts; the packaged modules exist to keep analysis and plotting logic out of notebook cells.
 
 #### Three-tier placement rule
 
@@ -121,7 +123,7 @@ All prediction payloads and data interfaces use **Pydantic** models with mypy-co
 
 ### Notebook outputs
 
-**Decision (Apr 1, 2026):** Notebook outputs are **not** stripped automatically. `nbstripout` has been removed from the pre-commit config. Contributors decide per-notebook whether to commit outputs — exploration notebooks (e.g., `cpi_data_exploration.ipynb`) may include outputs to aid readability. The `nbqa-ruff` linter still runs on notebook source cells via pre-commit.
+**Decision (Apr 1, 2026):** Notebook outputs are **not** stripped automatically. `nbstripout` has been removed from the pre-commit config. Contributors decide per-notebook whether to commit outputs — exploration notebooks (e.g. `getting_started/cpi_data_exploration.ipynb`) may include outputs to aid readability. The `nbqa-ruff` linter still runs on notebook source cells via pre-commit.
 
 ---
 
@@ -149,7 +151,9 @@ A `ForecastingTask` is a Pydantic model that defines a prediction *problem*. It 
 Fields:
 - `task_id` — unique identifier
 - `target_series_id` — the series being forecast (key into `SeriesStore`)
-- `horizon` — number of steps ahead
+- `horizons: list[int]` — one or more horizon steps to forecast. `horizon h` means `h` frequency-units ahead of the origin. Single-step tasks use `horizons=[N]`. Multi-step trajectory tasks (e.g. CFPR's 12-month Jan–Dec window) list all required steps explicitly.
+  - **Backward compat:** `horizon: N` (singular int) is still accepted everywhere — both as a Python keyword argument and in YAML — and is silently coerced to `horizons: [N]` by a `model_validator`. Existing specs and code continue to work without changes.
+  - **`task.horizon` property:** returns `max(task.horizons)`. Darts models use this as their `n` (outermost forecast step); single-horizon tasks get the single value.
 - `frequency` — temporal resolution (e.g., `"MS"` for month-start, `"h"` for hourly)
 - `resolution_fn` — how to look up ground truth; defaults to `"observed_value_at_resolution_timestamp"`. **Currently a placeholder** — the harness always uses the default strategy regardless of this value. Dispatch on alternative strategies is deferred; the field is defined now so specs carry the intent and no breaking change is required when dispatch is added.
 - `description` — human-readable description of the task
@@ -167,18 +171,26 @@ Key design properties:
 - **Additive, not a replacement**: `DataService` remains as the registration and management layer (used by setup scripts and notebooks). `ForecastContext` is its companion for the predictor interface.
 - **Mode-agnostic**: the harness creates a `ForecastContext` via `DataService.context(as_of)` for each backtest origin. In live evaluation, the same factory is called with the current date. The predictor interface is identical in both modes.
 
-**Predictor interface:**
+**Predictor interface — multi-horizon (breaking change, Apr 2026):**
 ```python
-def predict(task: ForecastingTask, context: ForecastContext) -> Prediction:
+def predict(task: ForecastingTask, context: ForecastContext) -> list[Prediction]:
     series = context.get_series(task.target_series_id)
     # series contains only observations available as of context.as_of
+    # Return one Prediction per horizon step in task.horizons.
     ...
 ```
+
+Single-horizon tasks return a one-element list. Multi-horizon tasks (e.g. a 12-step CFPR trajectory) return one element per step, all produced in a single model call. The evaluation harness scores each element independently and accumulates a flat `BacktestResult`.
+
+**Rationale:** trajectory-based models (Darts, LLMs) naturally produce a coherent full-horizon path in one call. Forcing `N` separate single-step calls would be both inefficient and architecturally incoherent — especially for LLMs whose reasoning is over the whole trajectory. `list[Prediction]` makes single- and multi-horizon a natural special case of the same interface.
 
 **Harness pattern:**
 ```python
 ctx = data_service.context(as_of=origin_date)
-prediction = predictor.predict(task, ctx)
+preds = predictor.predict(task, ctx)  # list[Prediction]
+for pred in preds:
+    actual = resolve(pred.forecast_date)
+    score = crps(pred, actual)
 ```
 
 **Why not pass `DataService` + `as_of` separately?** Passing them separately makes cutoff enforcement opt-in — a predictor must remember to pass `as_of` on every query. `ForecastContext` makes it structurally impossible to forget.
@@ -302,7 +314,7 @@ class EvalSpec(BaseModel):
 A lightweight, file-backed counter. Persists to a YAML file at a caller-supplied path:
 
 ```yaml
-cpi_allitems_eval_2yr:
+cpi_gasoline_eval_2yr:
   runs: 2
   last_run_at: "2026-04-03T10:00:00"
 ```
@@ -333,6 +345,88 @@ Mirrors `BacktestResult` with `eval_spec: EvalSpec` instead of `spec: BacktestSp
 
 - **Per-user tracking** — the tracker path is caller-supplied; binding it to a bootcamp participant identity is a future concern.
 - **Spec hash-locking** — automatic detection of spec modifications to prevent a participant from quietly expanding a protected window.
+
+### Multi-Target Evaluation
+
+**Decision date:** Apr 16, 2026
+
+`MultiTargetBacktestSpec` and `MultiTargetEvalSpec` allow a predictor to be evaluated across a collection of related `ForecastingTask` objects under identical window parameters (shared `start`, `end`, `stride`, `warmup`). The primary use case is evaluating all food CPI sub-categories simultaneously.
+
+All tasks in a multi-target spec must share the same `frequency` — enforced at construction time.
+
+```python
+class MultiTargetBacktestSpec(BaseModel):
+    spec_id: str                   # stable identifier; used by the artifact store
+    description: str = ""          # human-readable; propagated to per-task BacktestSpec objects
+    tasks: list[ForecastingTask]   # all must share the same frequency
+    start: datetime
+    end: datetime
+    stride: int = 1
+    warmup: int = 0
+    def specs(self) -> list[BacktestSpec]: ...
+
+def multi_backtest(
+    predictor: Predictor,
+    spec: MultiTargetBacktestSpec,
+    data_service: DataService,
+) -> dict[str, BacktestResult]: ...  # keyed by task_id
+```
+
+`BacktestSpec`, `EvalSpec`, and `MultiTargetEvalSpec` also carry a
+free-form `description` string; `MultiTargetBacktestSpec.specs()` and
+`MultiTargetEvalSpec.specs()` propagate the spec-level description down to
+the per-task `BacktestSpec` / `EvalSpec` objects they generate.
+
+`MultiTargetEvalSpec` mirrors `EvalSpec` with an additional `tasks` list instead of a single `task`. It adds `spec_id` and `max_runs` for budget control. **Budget semantics:** one call to `multi_evaluate()` consumes one run against `max_runs` regardless of how many tasks are included — the budget governs evaluation *sessions*, not individual series.
+
+Reference multi-target specs live in `reference_specs/food_cpi/` — notably
+`food_cpi_cfpr_{backtest,eval}.yaml`, the canonical CFPR task covering all
+9 Canadian food CPI sub-indices with trajectory horizons 6-17 from annual
+July origins.
+
+### Artifact Storage for Results
+
+**Decision date:** Apr 17, 2026
+
+`BacktestResult` and `EvalResult` are persisted as YAML files under
+`data/predictions/<spec_id>/`.  The module
+`aieng.forecasting.evaluation.artifacts` provides:
+
+- `save_backtest_result` / `load_backtest_result` — single-result
+  round-trip.
+- `save_multi_backtest_results` / `load_multi_backtest_results` — dict
+  keyed by task_id, one file per `(predictor_id, task_id)`.
+- `cached_backtest` / `cached_multi_backtest` — high-level wrappers that
+  skip recomputation when the YAML for a given
+  `(spec_id, predictor_id, task_id)` already exists.  Partial caches are a
+  first-class case: only missing task results are recomputed.
+- `save_eval_result` / `save_multi_eval_results` — write-only helpers for
+  the eval side (eval is not cached because `EvalTracker` already bounds
+  it).
+
+**Scope decision:** the artifact store is filesystem-backed YAML, not
+Langfuse.  Langfuse is the right home for agent traces; it is a poor fit
+for a 200-row AutoARIMA output.  `data/` is gitignored so each
+participant's cache is private to their workspace.
+
+### Human-Readable Task/Spec Descriptions
+
+**Decision date:** Apr 17, 2026
+
+`aieng.forecasting.evaluation.describe` provides:
+
+- `describe_task(task, data_service=None)` — plain-text summary of a
+  `ForecastingTask`, optionally enriched with per-series metadata from
+  the data service.
+- `describe_spec(spec, data_service=None)` — same for
+  `BacktestSpec`, `EvalSpec`, `MultiTargetBacktestSpec`,
+  `MultiTargetEvalSpec`; dispatches on type.
+
+The rendered output is intended to serve three roles: (1) notebook
+introspection of a loaded YAML spec, (2) the textual problem statement
+handed to an LLM-based predictor, and (3) human-readable documentation
+when a spec is reviewed.  Spec YAML remains the source of truth; these
+helpers just pretty-print what is already there.
 
 ### Series Relationships
 
@@ -386,7 +480,7 @@ DataService                  # registration + management layer (scripts, noteboo
     ├── BaseAdapter          # protocol / ABC all adapters must implement             │
     ├── LocalCSVAdapter      # first-class path for custom datasets (planned)         │
     ├── StatCanAdapter       # ✅ implemented                                         │
-    ├── FREDAdapter          # planned                                                │
+    ├── FREDAdapter          # ✅ implemented                                          │
     ├── yfinanceAdapter      # planned                                                │
     └── NYISOAdapter         # planned — CSV download, hourly load/price data         │
                                                                                       │
@@ -403,7 +497,7 @@ The following datasets are confirmed for the bootcamp. Access conditions and int
 | Dataset | Access Method | License / Conditions | Adapter Status | Notes |
 | :--- | :--- | :--- | :--- | :--- |
 | **Statistics Canada** | `stats-can` Python library / SDMX API | Open Government Licence (no conditions) | ✅ `StatCanAdapter` | `released_at` approximated as `timestamp + 21 days` |
-| **FRED** | REST API with key | Attribution required; API key needed | Planned `FREDAdapter` | Used for US and international macro series |
+| **FRED** | REST API with key | Attribution required; API key needed | ✅ `FREDAdapter` | `released_at = timestamp` (no vintage dates via `fredapi`); API key from `FRED_API_KEY` env var |
 | **yfinance** | Python SDK | Attribution required; rate-limited | Planned `yfinanceAdapter` | Suitability for bulk backtesting (vs. real-time) still under evaluation |
 | **NYISO** | CSV download | No conditions apparent on data files | Planned `NYISOAdapter` | 5-minute granularity, ~11 load zones; task framing TBD |
 | **ForecastBench** | Direct download (site + GitHub) | CC-BY-SA-4.0 — attribution required | Separate integration (Pass 2) | Supersedes direct Metaculus API integration; includes Metaculus + FRED + Yahoo Finance + Rand questions, historical resolutions, and community predictions |
@@ -473,19 +567,32 @@ Shared abstractions are extracted after both passes are working — not designed
 ### Phase 1 Build Sequence (Pass 1) — Status
 
 1. ✅ `ContinuousForecast` + `Prediction` Pydantic models — YAML-serializable
-2. ✅ `Predictor` ABC — `predict(task: ForecastingTask, context: ForecastContext) -> Prediction`
-3. ✅ `DartsAutoARIMAPredictor` (Darts AutoARIMA, 500 Monte Carlo samples) — defined inline in `implementations/experiments/economic_forecasting/cpi_backtest_demo.ipynb`; moving to `implementations/methods/darts_arima.py` is tracked in the backlog (T3)
+2. ✅ `Predictor` ABC — `predict(task: ForecastingTask, context: ForecastContext) -> list[Prediction]` (**Apr 2026:** breaking change from `-> Prediction`; now returns one `Prediction` per horizon step)
+3. ✅ `DartsAutoARIMAPredictor` in `implementations/methods/darts_arima.py` — univariate Darts `AutoARIMA`; fits once to `n=max(task.horizons)`, extracts samples at each requested horizon step
 4. ✅ `BacktestSpec` + `BacktestResult` Pydantic models
-5. ✅ `backtest()` function — iterates origins, scores with CRPS via `properscoring`
+5. ✅ `backtest()` function — iterates origins; for each origin, scores all `list[Prediction]` returned by the predictor; flat `(origin × horizon)` result list
 6. ✅ `released_at` fix for StatCan CPI (21-day approximation)
-7. ✅ Reference spec YAML (`reference_specs/cpi_allitems_12m.yaml`) — Jan/Jul origins, 2000–2026
-8. ✅ Demo notebook (`implementations/experiments/economic_forecasting/cpi_backtest_demo.ipynb`)
+7. ✅ Reference spec YAMLs (`reference_specs/`) — use `horizons: [N]` (canonical); old `horizon: N` still accepted via backward-compat validator
+8. ✅ Demo notebook (`implementations/experiments/getting_started/cpi_backtest_demo.ipynb` — retargeted Apr 17, 2026 from CPI All-items to CPI Gasoline for a visibly-hard hello-world story)
 9. ✅ `Prediction.metadata` — optional `dict[str, Any]` escape hatch for predictor side-channel data
-10. ✅ Eval mode — `EvalSpec`, `EvalResult`, `EvalTracker`, `EvalBudgetExceededError`, `evaluate()`, reference spec `reference_specs/cpi_allitems_eval_2yr.yaml`
-11. ✅ `LastValuePredictor` — naive last-value baseline in `implementations/methods/naive.py`; first method in the importable `methods` package; also the annotated `Predictor` interface reference
-12. ✅ Two-predictor comparison in demo notebook — `LastValuePredictor` vs `DartsAutoARIMAPredictor` on `cpi_allitems_12m`, with per-origin CRPS table and comparison chart
+10. ✅ Eval mode — `EvalSpec`, `EvalResult`, `EvalTracker`, `EvalBudgetExceededError`, `evaluate()`, reference spec `reference_specs/cpi_gasoline_eval_2yr.yaml`
+11. ✅ `LastValuePredictor` — naive last-value baseline in `implementations/methods/naive.py`; returns one `Prediction` per horizon step (same flat value, persistence assumption)
+12. ✅ Two-predictor comparison in demo notebook — `LastValuePredictor` vs `DartsAutoARIMAPredictor` on `cpi_gasoline_12m`
 
-**Next:** Pass 2 (ForecastBench discrete event questions / `BinaryForecast` / BoC reference experiment); see backlog T4. Also: expand `methods/` with `SeasonalNaivePredictor`, a second Darts model, and a foundation model predictor (T3).
+13. ✅ `MultiTargetBacktestSpec` + `multi_backtest()` — evaluate one predictor across many tasks with a shared window; in `backtest.py`
+14. ✅ `MultiTargetEvalSpec` + `multi_evaluate()` — budget-limited multi-target eval; single call costs one budget run; in `eval.py`
+15. ✅ `FREDAdapter` — fetches any FRED series via `fredapi`; disk-caching to `.parquet`; API key from `FRED_API_KEY` env var; in `data/adapters/fred.py`
+16. ✅ `scripts/fetch_fred.py` — populates 5 monthly FRED covariate series for the food price experiment
+17. ✅ `DartsLinearRegressionPredictor` + `DartsLightGBMPredictor` in `implementations/methods/darts_regression.py` — per-target quantile regression; optional past covariates; multi-horizon: `_fit_and_sample` returns `dict[int, ndarray]` keyed by horizon step
+18. ✅ CFPR experiment (original) — single-category CFPR analysis with 12-step trajectory (horizons 6–17), avg/avg YoY, fast-mode flag, disaggregated error plots
+19. ✅ Reference specs for food CPI — `reference_specs/food_cpi/`
+20. ✅ `ForecastingTask.horizons: list[int]` — multi-horizon task definition; `horizon` (singular) accepted for backward compat; `task.horizon` property = `max(task.horizons)`
+21. ✅ Spec metadata — `spec_id` (required) + `description` on `MultiTargetBacktestSpec`; `description` on `BacktestSpec`, `EvalSpec`, `MultiTargetEvalSpec`, propagated through `.specs()`
+22. ✅ Artifact store — `aieng/forecasting/evaluation/artifacts.py` with YAML round-trip + `cached_backtest` / `cached_multi_backtest` under `data/predictions/<spec_id>/`
+23. ✅ Description helpers — `aieng/forecasting/evaluation/describe.py` (`describe_task`, `describe_spec`) for notebooks, docs, and LLM prompts
+24. ✅ CFPR refactor — canonical `food_cpi_cfpr_{backtest,eval}.yaml` across all 9 sub-indices (July origins, horizons 6–17); notebook rewritten as a narrative shell over `experiments.food_price_forecasting.{data,analysis,plots}`; FRED covariates removed from the canonical task (deferred pending a multivariate/agentic framing design)
+
+**Next:** Pass 2 (ForecastBench discrete event questions / `BinaryForecast` / BoC reference experiment); see backlog T4. Also: expand `methods/` with `SeasonalNaivePredictor` and a foundation model predictor (T3).  Deferred design threads: *Numeric predictors as agent skills* and *Covariate framing for multivariate and agentic predictors* (both in the backlog holding queue).
 
 ### Long-Term Vision
 

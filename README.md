@@ -33,8 +33,9 @@ aieng-forecasting/         # Installable library package (import as aieng.foreca
 implementations/           # Reference implementations (uv workspace package: aieng-implementations)
 ├── methods/               # Importable reference Predictor implementations
 │                          #   from methods.base_llmp import BaseLLMPredictor
-└── experiments/           # Use-case notebooks, specs, task configs — never imported
-    └── economic_forecasting/
+└── experiments/           # Use-case notebooks, specs, task configs
+    ├── getting_started/            # hello-world: single-series CPI gasoline backtest
+    └── food_price_forecasting/     # CFPR reference experiment (flagship use case)
 
 reference_specs/           # YAML specs for canonical backtest and eval tasks
 
@@ -65,7 +66,10 @@ uv run python scripts/fetch_cpi.py   # StatCan CPI — 47 Canada-wide series
 
 ### 3. Open an experiment
 
-Each use case under `implementations/experiments/` has a `README.md` with a recommended learning path. The current reference experiment is **economic forecasting** (`implementations/experiments/economic_forecasting/`), which walks through CPI backtesting end-to-end.
+Each use case under `implementations/experiments/` has a `README.md` with a recommended learning path.
+
+- **Start here:** `implementations/experiments/getting_started/` — the hello-world tour. Single series (CPI gasoline), 12-month horizon, naive + AutoARIMA baselines, one `BacktestSpec`, one `EvalSpec`. The smallest useful end-to-end walkthrough of the evaluation framework.
+- **Graduate to:** `implementations/experiments/food_price_forecasting/` — the bootcamp's flagship CFPR reference experiment. Nine correlated CPI sub-indices, a 12-step trajectory, the avg/avg YoY metric from the real Canada's Food Price Report, helper modules for analysis and plotting, and cached artefacts for fast iteration.
 
 ---
 
@@ -93,7 +97,7 @@ class MyPredictor(Predictor):
 from aieng.forecasting.evaluation import backtest, BacktestSpec
 import yaml
 
-with open("reference_specs/cpi_allitems_12m.yaml") as f:
+with open("reference_specs/cpi_gasoline_12m.yaml") as f:
     spec = BacktestSpec.model_validate(yaml.safe_load(f))
 
 result = backtest(predictor=my_predictor, spec=spec, data_service=svc)

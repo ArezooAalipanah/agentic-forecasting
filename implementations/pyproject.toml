@@ -5,10 +5,13 @@ description = "Reference method implementations for the Agentic Forecasting Boot
 authors = [{name = "Vector AI Engineering", email = "ai_engineering@vectorinstitute.ai"}]
 readme = "README.md"
 requires-python = ">=3.12"
-dependencies = ["aieng-forecasting"]
+dependencies = [
+    "aieng-forecasting",
+    "lightgbm>=4.6.0",
+]
 
 [tool.uv.sources]
 aieng-forecasting = { workspace = true }
 
 [tool.setuptools.packages.find]
-include = ["methods*"]
+include = ["methods*", "experiments*"]

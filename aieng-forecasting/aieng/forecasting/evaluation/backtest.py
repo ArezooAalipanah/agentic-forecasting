@@ -1,4 +1,10 @@
-"""BacktestSpec, BacktestResult, and the backtest() harness."""
+"""BacktestSpec, BacktestResult, and the backtest() harness.
+
+This module also provides :class:`MultiTargetBacktestSpec` and
+:func:`multi_backtest` for running a single predictor across a collection of
+related forecasting tasks (e.g. all food CPI sub-categories) under identical
+evaluation window parameters.
+"""
 
 from __future__ import annotations
 
@@ -70,6 +76,12 @@ class BacktestSpec(BaseModel):
         Minimum number of observations required in the cutoff-filtered series
         before a forecast origin is used. Origins that do not have enough
         history are silently skipped.
+    description : str
+        Free-form prose description of the backtest intent (methodology,
+        origin rationale, etc.). Optional — defaults to an empty string.
+        Consumers such as :func:`aieng.forecasting.evaluation.describe.describe_spec`
+        and LLM-based predictors surface this to provide qualitative context
+        alongside the quantitative task definition.
 
     Examples
     --------
@@ -97,6 +109,10 @@ class BacktestSpec(BaseModel):
     end: datetime = Field(description="Last candidate forecast origin (inclusive).")
     stride: int = Field(default=1, ge=1, description="Step size between origins in task-frequency units.")
     warmup: int = Field(default=0, ge=0, description="Minimum observations required before first forecast.")
+    description: str = Field(
+        default="",
+        description="Free-form prose description of the backtest intent (methodology, origin rationale, etc.).",
+    )
 
     @model_validator(mode="after")
     def start_before_end(self) -> "BacktestSpec":
@@ -137,16 +153,20 @@ class BacktestResult(BaseModel):
     predictor_id : str
         Identifier for the predictor that produced these forecasts.
     predictions : list[Prediction]
-        One ``Prediction`` per evaluated forecast origin, in chronological order.
+        Flat list of scored predictions. For single-horizon tasks this is one
+        entry per evaluated origin; for multi-horizon tasks it is
+        ``origins_scored × len(task.horizons)`` (minus any future steps that
+        could not yet be resolved). Ordered by origin then by horizon.
     scores : list[float]
-        CRPS score for each prediction, in the same order as ``predictions``.
+        CRPS score for each prediction, parallel to ``predictions``.
         Lower is better.
     mean_crps : float
-        Mean CRPS across all evaluated origins.
+        Mean CRPS across all scored (origin, horizon) pairs.
     ran_at : datetime
         UTC wall-clock time when the backtest was executed.
     skipped_origins : int
-        Number of candidate origins skipped due to insufficient warmup history.
+        Number of candidate origins where no horizon could be scored (either
+        warmup not met, or all forecast dates were unresolvable).
     """
 
     spec: BacktestSpec
@@ -277,16 +297,20 @@ def run_eval_loop(
                 skipped += 1
                 continue
 
-        prediction = predictor.predict(task, ctx)
+        origin_predictions = predictor.predict(task, ctx)
 
-        actual = _resolve(task, prediction.forecast_date, data_service)
-        if actual is None:
+        origin_scored = 0
+        for pred in origin_predictions:
+            actual = _resolve(task, pred.forecast_date, data_service)
+            if actual is None:
+                continue
+            score = _crps_for_prediction(pred, actual)
+            predictions.append(pred)
+            scores.append(score)
+            origin_scored += 1
+
+        if origin_scored == 0:
             skipped += 1
-            continue
-
-        score = _crps_for_prediction(prediction, actual)
-        predictions.append(prediction)
-        scores.append(score)
 
     if not predictions:
         raise ValueError(
@@ -356,3 +380,146 @@ def backtest(
         ran_at=datetime.now(tz=timezone.utc).replace(tzinfo=None),
         skipped_origins=skipped,
     )
+
+
+# ---------------------------------------------------------------------------
+# MultiTargetBacktestSpec and multi_backtest()  # noqa: ERA001
+# ---------------------------------------------------------------------------
+
+
+class MultiTargetBacktestSpec(BaseModel):
+    """Backtest spec that evaluates a predictor across multiple related tasks.
+
+    ``MultiTargetBacktestSpec`` groups several :class:`ForecastingTask` objects
+    under a single shared evaluation window (``start``, ``end``, ``stride``,
+    ``warmup``).  All tasks must share the same ``frequency`` — this is
+    enforced at construction time.
+
+    A typical use case is evaluating a predictor on all food CPI sub-categories
+    simultaneously: each category is a separate task, but they all use monthly
+    data and the same historical window.
+
+    The spec can be decomposed into a list of standard :class:`BacktestSpec`
+    objects via :meth:`specs`, or evaluated directly with :func:`multi_backtest`.
+
+    Parameters
+    ----------
+    spec_id : str
+        Stable identifier for this spec. Used as the directory key for
+        persisted artefacts (see
+        :mod:`aieng.forecasting.evaluation.artifacts`) and for surfacing the
+        spec in logs and agent context. Should be unique across all spec files.
+    tasks : list[ForecastingTask]
+        The prediction problems to evaluate.  All must share the same
+        ``frequency``.
+    start : datetime
+        First candidate forecast origin.
+    end : datetime
+        Last candidate forecast origin (inclusive).
+    stride : int
+        Step size between origins in task-frequency units.
+    warmup : int
+        Minimum number of observations required before a forecast origin is used.
+    description : str
+        Free-form prose description of the backtest intent (methodology,
+        origin rationale, etc.). Optional — defaults to an empty string.
+
+    Examples
+    --------
+    >>> spec = MultiTargetBacktestSpec(
+    ...     spec_id="food_cpi_cfpr_backtest",
+    ...     tasks=[task_food, task_meat, task_dairy],
+    ...     start=datetime(2000, 1, 1),
+    ...     end=datetime(2026, 1, 1),
+    ...     stride=6,
+    ...     warmup=24,
+    ... )
+    >>> per_task_results = multi_backtest(predictor=my_predictor, spec=spec, data_service=svc)
+    >>> for task_id, result in per_task_results.items():
+    ...     print(f"{task_id}: mean CRPS = {result.mean_crps:.4f}")
+    """
+
+    spec_id: str = Field(description="Stable identifier for this spec; keys the artefact store.")
+    tasks: list[ForecastingTask] = Field(
+        min_length=1, description="Prediction problems; all must share the same frequency."
+    )
+    start: datetime = Field(description="First candidate forecast origin.")
+    end: datetime = Field(description="Last candidate forecast origin (inclusive).")
+    stride: int = Field(default=1, ge=1, description="Step size between origins in task-frequency units.")
+    warmup: int = Field(default=0, ge=0, description="Minimum observations required before first forecast.")
+    description: str = Field(
+        default="",
+        description="Free-form prose description of the backtest intent (methodology, origin rationale, etc.).",
+    )
+
+    @model_validator(mode="after")
+    def _validate(self) -> "MultiTargetBacktestSpec":
+        if self.start >= self.end:
+            raise ValueError(f"start ({self.start}) must be before end ({self.end})")
+        frequencies = {t.frequency for t in self.tasks}
+        if len(frequencies) > 1:
+            raise ValueError(
+                f"All tasks in a MultiTargetBacktestSpec must share the same frequency. Found: {sorted(frequencies)}"
+            )
+        return self
+
+    def specs(self) -> list[BacktestSpec]:
+        """Decompose into one :class:`BacktestSpec` per task.
+
+        Returns
+        -------
+        list[BacktestSpec]
+            One spec per task, all sharing the same window parameters.
+        """
+        return [
+            BacktestSpec(
+                task=t,
+                start=self.start,
+                end=self.end,
+                stride=self.stride,
+                warmup=self.warmup,
+                description=self.description,
+            )
+            for t in self.tasks
+        ]
+
+
+def multi_backtest(
+    predictor: Predictor,
+    spec: MultiTargetBacktestSpec,
+    data_service: DataService,
+) -> dict[str, BacktestResult]:
+    """Run a backtest of a predictor across all tasks in a MultiTargetBacktestSpec.
+
+    Calls :func:`backtest` once per task and returns the results keyed by
+    ``task_id``.  All tasks share the same evaluation window, stride, and warmup
+    defined in the spec.
+
+    Parameters
+    ----------
+    predictor : Predictor
+        The forecasting model to evaluate.
+    spec : MultiTargetBacktestSpec
+        Defines the tasks, shared evaluation window, stride, and warmup.
+    data_service : DataService
+        Pre-populated data service.  Must have all target series registered.
+
+    Returns
+    -------
+    dict[str, BacktestResult]
+        Backtest results keyed by ``task_id``, one entry per task.
+
+    Raises
+    ------
+    KeyError
+        If any target series is not registered in the data service.
+    ValueError
+        If no origins can be scored for any task.
+
+    Examples
+    --------
+    >>> results = multi_backtest(predictor=my_predictor, spec=spec, data_service=svc)
+    >>> for task_id, result in results.items():
+    ...     print(f"{task_id}: {result.mean_crps:.4f}")
+    """
+    return {single_spec.task.task_id: backtest(predictor, single_spec, data_service) for single_spec in spec.specs()}

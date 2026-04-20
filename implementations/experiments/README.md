@@ -14,15 +14,28 @@ code. All files are run or opened directly (Jupyter notebooks, Python scripts).
 
 ```
 experiments/
-├── economic_forecasting/    # Canada CPI backtesting (StatCan)
-│   ├── README.md            # learning path for this use case
+├── getting_started/             # Hello-world: single-series CPI gasoline backtest
+│   ├── README.md
 │   ├── cpi_data_exploration.ipynb
 │   └── cpi_backtest_demo.ipynb
 │
-├── cfpr/                    # Canada's Food Price Report (planned)
-├── boc_rate_decisions/      # Bank of Canada rate decisions (planned)
+├── food_price_forecasting/      # CFPR reference experiment — the flagship use case
+│   ├── README.md
+│   ├── data.py                  #   build_food_cpi_service, canonical series
+│   ├── analysis.py              #   CFPR analysis helpers (avg/avg YoY, CRPS, MAPE)
+│   ├── plots.py                 #   trajectory fans, 3×3 YoY grid, etc.
+│   ├── food_data_exploration.ipynb
+│   └── food_cpi_experiment.ipynb
+│
+├── sp500/                       # S&P500 reference experiment (planned — Behnoosh)
+├── boc_rate_decisions/          # Bank of Canada rate decisions (planned)
 └── ...
 ```
+
+**Start with `getting_started/`.**  It is the intentional entry point —
+the smallest end-to-end walkthrough of the evaluation framework against
+a single volatile target.  `food_price_forecasting/` is the graduation
+step: same interfaces, much richer use case.
 
 ---
 
@@ -44,12 +57,16 @@ experiments/
 ## Adding a new use case
 
 1. Create `experiments/<use-case>/`
-2. Add a `README.md` with a learning path (see `economic_forecasting/README.md`
-   as a template)
+2. Add a `README.md` with a learning path (see
+   `food_price_forecasting/README.md` as a richly-worked template, or
+   `getting_started/README.md` for a minimal single-series example)
 3. Add a data population script to `scripts/` if a new data source is needed
 4. Define a `ForecastingTask` and add a reference `BacktestSpec` YAML to
    `reference_specs/`
 5. Write a demo notebook that walks through the task end-to-end
+6. If the experiment grows analysis or plotting helpers, put them in
+   sibling Python modules (`analysis.py`, `plots.py`, etc.) rather than
+   inside notebook cells — see `food_price_forecasting/` for the pattern.
 
 The second use case should take significantly less effort than the first — the
 adapter pattern, task definition, spec structure, and notebook scaffolding are
