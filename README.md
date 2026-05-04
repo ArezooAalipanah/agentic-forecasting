@@ -53,7 +53,9 @@ implementations/           # Reference experiments and helpers
 `-- food_price_forecasting/
 planning-docs/
 `-- bootcamp-workplan.md   # Single planning source of truth
-playground/                # Demo and exploration code, including news grounding
+playground/                # Demo and exploration code
+|-- energy_yfinance/       # Energy/oil yfinance market-data exploration
+`-- news_search/           # News grounding playground
 reference_specs/           # YAML backtest and eval specs
 scripts/                   # Data population scripts
 ```
@@ -90,6 +92,7 @@ Each use case under `implementations` has a `README.md` with a recommended learn
 
 - **Start here:** `implementations/getting_started/` — the hello-world tour. Single series (CPI gasoline), 12-month horizon, naive + AutoARIMA baselines, one `BacktestSpec`, one `EvalSpec`. The smallest useful end-to-end walkthrough of the evaluation framework.
 - **Graduate to:** `implementations/food_price_forecasting/` — the CFPR reference experiment, flagship of the no-futures multivariate case. Nine correlated CPI sub-indices, a 12-step trajectory, the avg/avg YoY metric from the real Canada's Food Price Report, helper modules for analysis and plotting, and cached artefacts for fast iteration.
+- **Explore:** `playground/energy_yfinance/` — the first energy/oil yfinance market-data exploration using the core yfinance adapter.
 - **Look ahead to:** the bootcamp centrepiece — the Track 1 + Track 2 convergence built on the S&P 500 template and then extended to energy commodities. See `planning-docs/bootcamp-workplan.md` for current scope and experiment sequencing.
 
 ## Core Concepts

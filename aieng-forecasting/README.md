@@ -9,6 +9,9 @@ This package provides stable infrastructure used across reference implementation
 - Backtesting, evaluation, scoring, and artifact helpers.
 - Reusable reference predictors under `aieng.forecasting.methods`.
 
+Current data adapters cover StatCan tables, FRED series, and daily yfinance
+market series.
+
 ## Install
 
 Base install:
