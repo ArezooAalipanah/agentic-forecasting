@@ -42,7 +42,7 @@ These are the experiments we plan to make runnable, documented, and suitable for
 | Food Price Forecasting      | CFPR-style multivariate CPI task and clean model selection case study comparing baselines & LLMPs.| StatCan; optional FRED extensions  | Ethan     | **Complete.** Baselines and LLMPs integrated. Mini specs for fast iteration. No protected historical eval (leakage). |
 | Financial Markets - S&P 500 | Deep numerical-methods comparison; first formal financial-markets Track 1 template.              | yfinance; optional FRED covariates | Behnoosh  | **In progress.** Net-new reference implementation.                                                                                     |
 | Energy/Oil                  | Daily WTI forecasting with proper eval; sponsor-facing context-driven case.                      | yfinance                           | Ethan     | **Extended — adaptive agent notebooks in progress.** Four-notebook curriculum complete; expanding to six notebooks to add adaptive agent training (NB05) and protected eval (NB06). See [adaptive-agent-notebook-design.md](adaptive-agent-notebook-design.md). |
-| BoC Rate Decisions          | Sole binary/discrete-event reference experiment and validation surface for `BinaryForecast`.     | StatCan, FRED, public BoC material | Ethan     | **Implemented (quantitative path).** Binary harness (payload_type, Brier, origin_dates) in core; data layer, four predictors, two notebooks, protected 2025-26 eval spec. Deferred: report-grounded context, reasoning-alignment evaluator, live forecasting. |
+| BoC Rate Decisions          | Sole discrete-event reference experiment: 3-way cut/hold/hike direction (RPS) as the primary task; binary cut framing (Brier) kept as a compact reference. Validation surface for `CategoricalForecast` and `BinaryForecast`. | StatCan, FRED, public BoC material | Ethan     | **Implemented (quantitative path).** Discrete harness (payload_type, ordered categories, Brier + RPS, origin_dates) in core; data layer, four predictors per framing, two notebooks, protected 2025-26 direction eval spec. Deferred: report-grounded context, reasoning-alignment evaluator, live forecasting. |
 
 ### Energy/Oil 2026 Case Study
 
@@ -191,15 +191,15 @@ Deliverables completed:
 
 ### E. BoC rate prediction reference (Ethan) — quantitative path implemented
 
-Status: implemented (June 2026), `implementations/boc_rate_decisions/`.
+Status: implemented (June 2026), `implementations/boc_rate_decisions/`. Reframed to a 3-way ordered-categorical problem (decision: cut/hold/hike, RPS-scored) as the primary task, with the binary cut/no-cut framing kept as a compact copy-paste reference for naturally binary problems (prediction-market style).
 
 Delivered:
 
-- Event framing: P(rate cut at the next fixed announcement date), cut = any decrease, holds/hikes = 0; origins at announcement − 1 day; emergency (unscheduled) announcements excluded from the task but validated against.
-- Core harness extensions: `ForecastingTask.payload_type`, Brier dispatch in `backtest()`/`evaluate()` (`mean_crps` → `mean_score` + `metric` with a load alias for old artifacts), explicit `origin_dates` on specs, `BinaryProbabilityLLMPredictor`, `HistoricalFrequencyPredictor`.
-- Data: StatCan daily target rate + 2yr yield + CPI, FRED unemployment, curated source-cited `meeting_schedule.yaml` (2009–2026), derived `boc_rate_cut_event` series with schedule-vs-rate validation, `scripts/fetch_boc.py`.
-- Predictors: base-rate floor, fit-at-origin logistic regression on leak-safe macro features, BoC binary-LLMP recipe, agentic analyst (quantitative-only config + news-grounded config as the report-context seam).
-- Specs (smoke / full backtest 2010–2024 / protected eval 2025–Jun 2026 with `max_runs: 5`), notebooks 01–02, analysis/plots helpers, use-case tests.
+- Primary framing: distribution over {cut, hold, hike} at the next fixed announcement date (direction of any-size change); origins at announcement − 1 day; emergency (unscheduled) announcements excluded from the task but validated against. Binary view (P(cut), Brier) retained as the warm-up reference, including the RPS(K=2) ≡ Brier identity check.
+- Core harness extensions: `ForecastingTask.payload_type` (continuous/binary/categorical) with ordered `TaskCategory` declarations, Brier + unnormalized-RPS dispatch in `backtest()`/`evaluate()` (`mean_crps` → `mean_score` + `metric` with a load alias for old artifacts), explicit `origin_dates` on specs, `BinaryProbabilityLLMPredictor` + `CategoricalProbabilityLLMPredictor`, `HistoricalFrequencyPredictor` + `CategoricalFrequencyPredictor`, `DiscreteAgentForecastOutput` + `CategoricalAgentForecastOutput`.
+- Data: StatCan daily target rate + 2yr yield + CPI, FRED unemployment, curated source-cited `meeting_schedule.yaml` (2009–2026), derived `boc_rate_decision_direction` (−1/0/+1) and `boc_rate_cut_event` (0/1) series with schedule-vs-rate validation, `scripts/fetch_boc.py`.
+- Predictors: climatology floor, fit-at-origin (multinomial) logistic regression on leak-safe macro features, BoC direction- and binary-LLMP recipes, direction-native agentic analyst (quantitative-only config + news-grounded config as the report-context seam).
+- Specs (direction smoke / full backtest 2010–2024 / protected eval 2025–Jun 2026 with `max_runs: 5`, plus binary smoke/backtest references), notebooks 01–02, modality-generic analysis/plots helpers (score leaderboard, one-vs-rest calibration), use-case tests.
 
 Deferred (explicit seams in code, see use-case README roadmap):
 

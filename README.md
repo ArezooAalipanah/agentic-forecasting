@@ -7,7 +7,7 @@ The bootcamp teaches participants to build, evaluate, and compare forecasting sy
 ## What This Repo Provides
 
 - Core forecasting infrastructure in `aieng-forecasting` (`aieng.forecasting`): data services, cutoff enforcement, forecasting tasks, prediction payloads, backtesting, evaluation, and artifacts.
-- Reference methods in `aieng-forecasting/aieng/forecasting/methods`: reusable `Predictor` implementations including naive baselines (continuous and binary), Darts numerical predictors, LLM-process predictors (continuous and binary-probability), and ADK-based agentic infrastructure (`build_adk_agent`, `AdkTextRunner`, and `AgentPredictor`).
+- Reference methods in `aieng-forecasting/aieng/forecasting/methods`: reusable `Predictor` implementations including naive baselines (continuous, binary, and categorical), Darts numerical predictors, LLM-process predictors (continuous, binary-probability, and categorical-probability), and ADK-based agentic infrastructure (`build_adk_agent`, `AdkTextRunner`, and `AgentPredictor`).
 - Langfuse / OpenTelemetry tracing bootstrap (`aieng.forecasting.langfuse_tracing`) for LiteLLM and Google ADK.
 - Reference experiments in `implementations`: notebooks, helpers, task-specific configuration, and (target layout) co-located YAML specs.
 - YAML backtest and eval specs co-located under `implementations/<use-case>/specs/`.
@@ -24,7 +24,7 @@ The formal cohort 1 reference experiments are:
 | Food Price Forecasting | CFPR-style multivariate food CPI task (clean baseline vs LLMP). | Implemented for the canonical StatCan path. |
 | Energy/Oil | Flagship daily WTI commodity price forecasting (Prophet, LLMP, and progressive agents vs 2026 geopolitical shock). | Implemented. |
 | Financial Markets - S&P 500 | Deep numerical-methods comparison; financial-markets Track 1 template. | In progress (Behnoosh). |
-| BoC Rate Decisions | Binary/discrete-event reference experiment: P(rate cut at the next announcement), Brier-scored. | Implemented (quantitative path); report-grounded context and reasoning-alignment eval deferred. |
+| BoC Rate Decisions | Discrete-event reference experiment: cut/hold/hike direction at the next announcement, RPS-scored; compact binary (Brier) reference included. | Implemented (quantitative path); report-grounded context and reasoning-alignment eval deferred. |
 
 ForecastBench, energy as a formal Track 1 extension, additional financial assets, richer covariates, and time-series foundation models are participant extension ideas unless explicitly pulled into the workplan.
 
@@ -56,7 +56,7 @@ implementations/           # Reference experiments, helpers, and co-located spec
 |-- energy_oil_forecasting/
 |   `-- specs/             # WTI crude oil backtest and eval YAML
 `-- boc_rate_decisions/
-    `-- specs/             # BoC rate-cut backtest, eval, and smoke YAML
+    `-- specs/             # BoC rate-direction (and binary rate-cut) backtest, eval, and smoke YAML
 planning-docs/
 `-- bootcamp-workplan.md   # Single planning source of truth
 playground/                # Demo and exploration code (not formal reference experiments)
@@ -113,7 +113,7 @@ Each use case under `implementations` has a `README.md` with a recommended learn
 - **Start here:** `implementations/getting_started/` — the hello-world tour. Single series (CPI gasoline), 1-month horizon, naive + AutoARIMA baselines, one `BacktestSpec`, one `EvalSpec`. The smallest useful end-to-end walkthrough of the evaluation framework.
 - **Graduate to:** `implementations/food_price_forecasting/` — the CFPR reference experiment, flagship of the no-futures multivariate case. Nine correlated CPI sub-indices, a 12-step trajectory, the avg/avg YoY metric from the real Canada's Food Price Report, baselines plus LLMP and agentic predictors, helper modules for analysis and plotting, and cached artefacts for fast iteration.
 - **Demo:** `playground/energy_case_study/` — the energy/oil information-session case study (Prophet rolling backtest + agentic scenario analysis). Promotion to a formal reference experiment is planned.
-- **Then branch out:** `implementations/boc_rate_decisions/` — the discrete-event reference. P(rate cut at the next Bank of Canada announcement), binary tasks on an irregular meeting calendar, Brier scoring and calibration instead of CRPS, and an agentic analyst whose reasoning traces feed the planned reasoning-alignment evaluation.
+- **Then branch out:** `implementations/boc_rate_decisions/` — the discrete-event reference. Cut/hold/hike direction at the next Bank of Canada announcement: ordered-categorical tasks on an irregular meeting calendar, RPS scoring and one-vs-rest calibration instead of CRPS, a compact binary (Brier) warm-up for prediction-market-style problems, and an agentic analyst whose reasoning traces feed the planned reasoning-alignment evaluation.
 - **Look ahead to:** S&P 500 numerical comparison (Behnoosh), energy/oil reference promotion (Ethan), then deeper agent and analyst work. See `planning-docs/bootcamp-workplan.md` for current scope and sequencing.
 
 ## Core Concepts
