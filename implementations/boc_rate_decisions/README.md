@@ -2,11 +2,19 @@
 
 Predicts the **direction of the Bank of Canada's decision at the next fixed
 announcement date** — cut, hold, or hike — as a calibrated probability
-distribution. This is the repository's reference implementation for
-**discrete event prediction**. Where every other use case forecasts a
-continuous trajectory and scores it with CRPS, this one resolves an ordered
-categorical outcome on an irregular meeting calendar and scores
-distributions with the **Ranked Probability Score (RPS)**.
+distribution issued **four weeks (28 days) before the announcement**. This
+is the repository's reference implementation for **discrete event
+prediction**. Where every other use case forecasts a continuous trajectory
+and scores it with CRPS, this one resolves an ordered categorical outcome
+on an irregular meeting calendar and scores distributions with the
+**Ranked Probability Score (RPS)**.
+
+The 28-day lead is the point: on the eve of a decision the 2-year GoC yield
+has already absorbed the market consensus, so a T−1 "forecast" mostly reads
+market pricing off a curve. Four weeks out the decision is genuinely
+uncertain, and the skill being measured is *anticipating cycle turns before
+the market converges*. An eve-of-decision (T−1) diagnostic variant is kept
+alongside; notebook 02 compares the two leads directly.
 
 It is the validation surface for the discrete half of the evaluation
 harness: `ForecastingTask.payload_type == "categorical"` with ordered
@@ -29,7 +37,7 @@ harness applied to a problem that is not a time series.
 
 ## Prediction task
 
-**Question:** at the fixed announcement date occurring one day after the
+**Question:** at the fixed announcement date occurring 28 days after the
 forecast origin, will the Bank of Canada CUT, HOLD, or HIKE its target for
 the overnight rate? Outcome is the direction of the change (any size).
 
@@ -40,11 +48,19 @@ the overnight rate? Outcome is the direction of the change (any size).
   task via `categories`, which is what makes RPS distance-sensitive: mass on
   *hike* when the Bank cuts is penalised through two cumulative thresholds,
   mass on *hold* through one.
-- **Origins:** `announcement_date − 1 day`, listed explicitly in the specs
-  via `origin_dates` (the meeting calendar is irregular; a stride cannot
-  produce it).
-- **Horizon:** 1 day — the forecast date lands exactly on the announcement,
-  and cutoff enforcement excludes the decision itself.
+- **Origins:** `announcement_date − 28 days`, listed explicitly in the
+  specs via `origin_dates` (the meeting calendar is irregular; a stride
+  cannot produce it). Scheduled meetings are never closer than 35 days
+  apart, so the previous decision is always visible at the origin. A
+  use-case test (`test_specs.py`) asserts the origin lists stay consistent
+  with `meeting_schedule.yaml`.
+- **Horizon:** 28 days — the forecast date lands exactly on the
+  announcement, and cutoff enforcement excludes everything after the
+  origin.
+- **Eve diagnostic:** `boc_rate_direction_eve_{smoke,backtest}.yaml` keep
+  the T−1 framing (task id `boc_rate_direction_next_meeting_eve`) for the
+  lead-time comparison in notebook 02 — the RPS gap between T−28 and T−1
+  separates anticipation from eve-of-decision market reading.
 - **Metric:** unnormalized RPS (the Epstein/Murphy cumulative form: for
   \(K = 2\) it equals the binary Brier score \((p-y)^2\); Brier's original
   1950 multi-category score is twice this — both conventions circulate).
@@ -99,7 +115,7 @@ re-run `scripts/fetch_boc.py --refresh` to pick up new announcements.
 | Group | Predictor | Information set |
 |---|---|---|
 | Floor baseline | `CategoricalFrequencyPredictor` (core package) | Past outcomes only — the constant climatological distribution |
-| Conventional | `predictors/logistic_baseline.py` | Fit-at-origin multinomial logistic regression on four leak-safe macro features (yield spread, rate momentum, inflation gap, unemployment momentum); dispatches to plain logistic regression on binary tasks |
+| Conventional | `predictors/logistic_baseline.py` | Fit-at-origin multinomial logistic regression on four leak-safe macro features (yield spread, rate momentum, inflation gap, unemployment momentum); training features are rebuilt at each past meeting minus the task's own lead, so the train and predict feature distributions match; dispatches to plain logistic regression on binary tasks |
 | LLMP | `predictors/llmp_direction.py` → `CategoricalProbabilityLLMPredictor` | Labelled outcome history + BoC context block; one structured call, direct distribution elicitation. `predictors/llmp_binary.py` is the binary counterpart |
 | Agentic | `analyst_agent/` → `AgentPredictor` + `CategoricalAgentForecastOutput` | Rate path + decision history + **the same macro features as the logistic model** |
 
@@ -120,11 +136,13 @@ planned reasoning-alignment evaluator (see roadmap below).
 
 ```
 specs/
-├── boc_rate_direction_backtest.yaml  # 120 origins, 2010–2024 (3 easing + 3 tightening cycles)
-├── boc_rate_direction_eval.yaml      # 12 origins, Jan 2025 – Jun 2026, max_runs: 5 (no hikes in window)
-├── boc_rate_direction_smoke.yaml     # 3 origins in 2024 (one hold, two cuts) — dev loop
-├── boc_rate_cut_backtest.yaml        # binary reference: 120 origins, Brier-scored
-└── boc_rate_cut_smoke.yaml           # binary reference: 3 origins — dev loop
+├── boc_rate_direction_backtest.yaml      # CANONICAL: T−28, 120 origins, 2010–2024 (3 easing + 3 tightening cycles)
+├── boc_rate_direction_eval.yaml          # T−28, 12 origins, Jan 2025 – Jun 2026, max_runs: 5 (no hikes in window)
+├── boc_rate_direction_smoke.yaml         # T−28, 3 origins in 2024 (one hold, two cuts) — dev loop
+├── boc_rate_direction_eve_backtest.yaml  # T−1 eve-of-decision diagnostic, 120 origins
+├── boc_rate_direction_eve_smoke.yaml     # T−1 diagnostic, 3 origins — lead comparison dev loop
+├── boc_rate_cut_backtest.yaml            # binary reference: T−1, 120 origins, Brier-scored
+└── boc_rate_cut_smoke.yaml               # binary reference: T−1, 3 origins — dev loop
 ```
 
 Notebook 02 selects between smoke and full via `EXPERIMENT_CONFIG`.
@@ -156,7 +174,7 @@ event derivation semantics; feature leak-safety).
 | Notebook | Purpose |
 |---|---|
 | `01_boc_data_exploration.ipynb` | Problem framing (ordered decision vs time series), policy-rate history with cut/hold/hike markers, direction derivation + schedule validation, class imbalance and the climatology RPS floor (with the cumulative-Brier decomposition), cutoff discipline at a real origin. |
-| `02_boc_rate_direction_experiment.ipynb` | **Main experiment.** Binary warm-up (the copy-paste reference + RPS(K=2) ≡ Brier check), smoke/full config switch, cached backtests for all four predictors, RPS leaderboard with skill scores, decision timeline (P(cut) and P(hike)), one-vs-rest reliability curves, agent-reasoning inspection, budget-gated protected eval. |
+| `02_boc_rate_direction_experiment.ipynb` | **Main experiment.** Binary warm-up (the copy-paste reference + RPS(K=2) ≡ Brier check), smoke/full config switch, cached backtests for all four predictors at the canonical T−28 lead, RPS leaderboard with skill scores, the T−28 vs T−1 lead-time comparison ("anticipation gap"), decision timeline (P(cut) and P(hike)), one-vs-rest reliability curves, agent-reasoning inspection, budget-gated protected eval. |
 
 ---
 

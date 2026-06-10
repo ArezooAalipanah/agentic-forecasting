@@ -185,7 +185,9 @@ class BoCLogisticPredictor(Predictor):
         cpi_df = context.get_series(CPI_SERIES_ID)
         unemployment_df = context.get_series(UNEMPLOYMENT_SERIES_ID)
 
-        feature_rows, outcomes = self._build_training_data(target_df, rate_df, yield_df, cpi_df, unemployment_df)
+        offset = pd.tseries.frequencies.to_offset(task.frequency)
+        lead = offset * task.horizons[0]
+        feature_rows, outcomes = self._build_training_data(target_df, rate_df, yield_df, cpi_df, unemployment_df, lead)
         current_features = build_feature_row(as_of, rate_df, yield_df, cpi_df, unemployment_df)
 
         if task.payload_type == "binary":
@@ -195,8 +197,7 @@ class BoCLogisticPredictor(Predictor):
         else:
             raise ValueError(f"{type(self).__name__} does not support payload_type='{task.payload_type}'.")
 
-        offset = pd.tseries.frequencies.to_offset(task.frequency)
-        forecast_date = (as_of + offset * task.horizons[0]).to_pydatetime()
+        forecast_date = (as_of + lead).to_pydatetime()
         return [
             Prediction(
                 predictor_id=self.predictor_id,
@@ -216,14 +217,21 @@ class BoCLogisticPredictor(Predictor):
         yield_df: pd.DataFrame,
         cpi_df: pd.DataFrame,
         unemployment_df: pd.DataFrame,
+        lead: pd.DateOffset,
     ) -> tuple[list[list[float]], list[float]]:
-        """Build leak-safe training examples from resolved past meetings."""
-        # Training set: every resolved past meeting, with features rebuilt as
-        # of that meeting's own origin (announcement - 1 day).
+        """Build leak-safe training examples from resolved past meetings.
+
+        Features for each past meeting are rebuilt at ``meeting - lead`` —
+        the same forecast lead the task predicts at — so the training and
+        prediction feature distributions match. A model trained on
+        eve-of-decision features (where the yield spread has converged on
+        the outcome) would be miscalibrated when asked to predict four
+        weeks out.
+        """
         feature_rows: list[list[float]] = []
         outcomes: list[float] = []
         for meeting, outcome in zip(target_df["timestamp"], target_df["value"]):
-            past_origin = pd.Timestamp(meeting) - pd.Timedelta(days=1)
+            past_origin = pd.Timestamp(meeting) - lead
             features = build_feature_row(past_origin, rate_df, yield_df, cpi_df, unemployment_df)
             if features is None:
                 continue
