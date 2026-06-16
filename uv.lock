@@ -80,7 +80,7 @@ requires-dist = [
 [package.metadata.requires-dev]
 dev = [
     { name = "codecov", specifier = ">=2.1.13" },
-    { name = "e2b", specifier = ">=2.28.0" },
+    { name = "e2b", specifier = ">=2.29.0" },
     { name = "mypy", specifier = ">=2.1.0" },
     { name = "nbqa", specifier = ">=1.9.1" },
     { name = "pip-audit", specifier = ">=2.10.1" },
@@ -1204,7 +1204,7 @@ wheels = [
 
 [[package]]
 name = "e2b"
-version = "2.28.0"
+version = "2.29.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "attrs" },
@@ -1219,9 +1219,9 @@ dependencies = [
     { name = "typing-extensions" },
     { name = "wcmatch" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/70/f3/65d24a90bd2b5fcbbdca0b53e9cc12b53b5ad78658025b440785faed8dda/e2b-2.28.0.tar.gz", hash = "sha256:a80d9db579e193d06a617a5ae06264ee3bc66f2efa98a64986c706a8c97d8b9d", size = 165541, upload-time = "2026-06-10T17:33:17.402Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/db/e2/504769a849f89edbcadce83b5cf6cbc19af7d061aab84893a2fa84d52e17/e2b-2.29.0.tar.gz", hash = "sha256:1a856dfb7f836f112b1f0443bedace279a154f7985ce09b057f61e2a824fe1a5", size = 167691, upload-time = "2026-06-15T18:51:44.471Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/d3/b1/65a2bb6f0527d94acc562a9ffe6f9fa4a94b1a3dcc7ff215300285bf3419/e2b-2.28.0-py3-none-any.whl", hash = "sha256:5d514b2059329a912feeb4f42ec2e1e4c26a95cddae9008ab40da34554219988", size = 313009, upload-time = "2026-06-10T17:33:16.167Z" },
+    { url = "https://files.pythonhosted.org/packages/ef/91/0feef4ee81f9db3f4f58eeb2319d4956499887ad7a5b7771f1d03e049167/e2b-2.29.0-py3-none-any.whl", hash = "sha256:ae22a249f55c7e486ff3aa0e2a6fa0eb88d9d67e44dff70217a6afb03c8b27c9", size = 315673, upload-time = "2026-06-15T18:51:43.13Z" },
 ]
 
 [[package]]
